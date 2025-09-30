@@ -5,7 +5,7 @@ import smtplib
 from email.mime.text import MIMEText
 
 user_bp = Blueprint('user_bp', __name__, url_prefix="/user")
-
+##
 
 def generate_password(username: str) -> str:
     safe_username = "".join(ch for ch in username if ch.isalnum()).lower()
