@@ -62,7 +62,7 @@ def add_user():
         if cursor.fetchone():
             return jsonify({"error": "User already exists"}), 400
 
-        # --- Check user group subscriber limit ---
+
         cursor.execute("SELECT usgrp_subscribers FROM user_group WHERE usgrp_id = %s", (user_group_id,))
         group_info = cursor.fetchone()
         if not group_info:

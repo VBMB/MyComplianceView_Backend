@@ -13,7 +13,7 @@ def submit_form():
     cin = data.get('cin')
     subscribers = data.get('subscribers', 0)  # default to 0 if not provided
 
-    # --- Validation ---
+
     if not company_name or not govt_document or not cin:
         return jsonify({"error": "Company Name, Govt Document, and CIN are required"}), 400
 
@@ -21,13 +21,13 @@ def submit_form():
     cursor = conn.cursor()
 
     try:
-        # --- Check for duplicate CIN ---
+
         cursor.execute("SELECT * FROM user_group WHERE usgrp_cin = %s", (cin,))
         existing_company = cursor.fetchone()
         if existing_company:
             return jsonify({"error": "Company already registered with this CIN"}), 400
 
-        # --- Insert new company record ---
+
         cursor.execute("""
             INSERT INTO user_group 
             (usgrp_company_name, usgrp_last_updated, usgrp_govt_document, usgrp_cin, usgrp_subscribers)
