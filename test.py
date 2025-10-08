@@ -1,5 +1,14 @@
-from werkzeug.security import generate_password_hash
+from flask import Flask, jsonify
+from routes.user import user_bp  # Make sure this is your user blueprint file
 
-pwd = "mypassword123"
-hashed = generate_password_hash(pwd, method='pbkdf2:sha256', salt_length=16)
-print(hashed)
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Flask is running!"
+
+# Register only the user blueprint
+app.register_blueprint(user_bp, url_prefix="/user")
+
+if __name__ == "__main__":
+    app.run(debug=True)

@@ -11,12 +11,15 @@ from routes.business_unit_all import business_unit_all_bp
 from routes.user_departments_add import user_departments_add_bp
 from routes.user_departments_all import user_departments_all_bp
 
+
 app: Flask = Flask(__name__)
 
 
 @app.route('/')
 def home():
     return "Flask is running!"
+
+
 
 
 @app.route('/test-db')
@@ -36,7 +39,7 @@ def test_db():
 app.register_blueprint(auth_bp, url_prefix='/auth')
 
 app.register_blueprint(form_bp, url_prefix='/form')
-app.register_blueprint(user_bp)
+app.register_blueprint(user_bp, url_prefix="/user")
 
 app.register_blueprint(login_bp)
 
