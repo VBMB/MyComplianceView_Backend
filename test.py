@@ -7,7 +7,7 @@ app = Flask(__name__)
 def home():
     return "Flask is running!"
 
-# Register only the user blueprint
+
 app.register_blueprint(user_bp, url_prefix="/user")
 
 if __name__ == "__main__":

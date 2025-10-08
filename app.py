@@ -35,7 +35,7 @@ def test_db():
     except Exception as e:
         return f"Error connecting to database: {e}"
 
-# Register API Blueprints
+
 app.register_blueprint(auth_bp, url_prefix='/auth')
 
 app.register_blueprint(form_bp, url_prefix='/form')
