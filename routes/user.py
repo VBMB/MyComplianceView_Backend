@@ -33,13 +33,14 @@ def add_admin():
     contact = data.get("contact")
     company_name = data.get("company_name")
     subscribers = data.get("subscribers", 10)
-    role = data.get("role")
     department = data.get("department")
     business_unit = data.get("business_unit")
     escalation_mail = data.get("escalation_mail")
-    if not all([email, contact, company_name, role, department, business_unit, escalation_mail]):
+    if not all([email, contact, company_name, department, business_unit, escalation_mail]):
         return jsonify({"error": "All required fields must be provided"}), 400
     raw_password = generate_password(name)
+    role = "admin"
+
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
@@ -56,6 +57,7 @@ def add_admin():
         """, (company_name, subscribers))
         conn.commit()
         group_id = cursor.lastrowid
+
         cursor.execute("""
             INSERT INTO user_list 
             (usrlst_user_group_id, usrlst_name, usrlst_email, usrlst_contact, 
