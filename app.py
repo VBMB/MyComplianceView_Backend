@@ -14,8 +14,6 @@ from routes.user_departments_all import user_departments_all_bp
 
 app: Flask = Flask(__name__)
 
-app.secret_key = "supersecretkey"
-
 
 @app.route('/')
 def home():
