@@ -14,6 +14,8 @@ from routes.user_departments_all import user_departments_all_bp
 
 app: Flask = Flask(__name__)
 
+app.secret_key = "supersecretkey"
+
 
 @app.route('/')
 def home():
@@ -40,6 +42,7 @@ app.register_blueprint(auth_bp, url_prefix='/auth')
 
 app.register_blueprint(form_bp, url_prefix='/form')
 app.register_blueprint(user_bp, url_prefix="/user")
+
 
 app.register_blueprint(login_bp)
 
