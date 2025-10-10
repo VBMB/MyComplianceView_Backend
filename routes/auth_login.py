@@ -12,50 +12,40 @@ def login():
 
         email = data.get("email")
         password = data.get("password")
-
         if not email or not password:
-            return jsonify({"error": "Email or Password are required"}), 400
+            return jsonify({"error": "Email and password are required"}), 400
 
         conn = get_db_connection()
         cursor = conn.cursor()
-
         cursor.execute("""
             SELECT usrlst_id, usrlst_name, usrlst_email, usrlst_role, usrlst_department
             FROM user_list
             WHERE usrlst_email = %s AND usrlst_password = SHA1(%s)
         """, (email, password))
-
         user = cursor.fetchone()
-
         cursor.close()
         conn.close()
 
         if not user:
-            return jsonify({"error": "Invalid username or password"}), 401
+            return jsonify({"error": "Invalid email or password"}), 401
 
-        # Determine role and message
         role = user.get("usrlst_role", "").lower()
-        if role == "user":
-            message = "User login successful"
-            redirect_to = "/user/dashboard"
-        elif role == "admin":
+        redirect_to = "/user/dashboard"
+        if role == "admin":
             message = "Admin login successful"
             redirect_to = "/admin/dashboard"
+        elif role == "user":
+            message = "User login successful"
         else:
             message = "Login successful"
-            redirect_to = None
-
 
         response = {
             "message": message,
-            "user": user
+            "user": user,
+            "redirect_to": redirect_to
         }
 
-        if redirect_to:
-            response["redirect_to"] = redirect_to
-
         if role == "admin":
-
             response["user_dashboard"] = "/user/dashboard"
 
         return jsonify(response), 200

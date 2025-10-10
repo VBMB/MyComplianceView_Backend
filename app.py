@@ -2,7 +2,6 @@ from flask import Flask
 
 
 from database import get_db_connection
-from routes.auth import auth_bp
 from routes.auth_login import login_bp
 from routes.form import form_bp
 from routes.user import user_bp
@@ -36,7 +35,7 @@ def test_db():
         return f"Error connecting to database: {e}"
 
 
-app.register_blueprint(auth_bp, url_prefix='/auth')
+
 
 app.register_blueprint(form_bp, url_prefix='/form')
 app.register_blueprint(user_bp, url_prefix="/user")
