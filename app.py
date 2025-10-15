@@ -1,7 +1,8 @@
 from flask import Flask
-
-
+from flask_cors import CORS
 from database import get_db_connection
+
+
 from routes.auth_login import login_bp
 from routes.form import form_bp
 from routes.user import user_bp
@@ -13,6 +14,9 @@ from routes.user_departments_all import user_departments_all_bp
 
 app: Flask = Flask(__name__)
 
+CORS(app)
+
+# CORS(app, origins=["http://localhost:3000"])
 
 @app.route('/')
 def home():
@@ -41,7 +45,7 @@ app.register_blueprint(form_bp, url_prefix='/form')
 app.register_blueprint(user_bp, url_prefix="/user")
 
 
-app.register_blueprint(login_bp)
+app.register_blueprint(login_bp, url_prefix="/login")
 
 app.register_blueprint(business_unit_add_bp)
 
