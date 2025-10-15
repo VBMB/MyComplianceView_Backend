@@ -32,15 +32,14 @@ def add_admin():
     email = data.get("email")
     contact = data.get("contact")
     company_name = data.get("company_name")
-    subscribers = data.get("subscribers", 10)
+    subscribers = data.get("subscribers",2)
     department = data.get("department")
     business_unit = data.get("business_unit")
-    escalation_mail = data.get("escalation_mail")
-    if not all([email, contact, company_name, department, business_unit, escalation_mail]):
+    escalation_mail = data.get("escalation_mail", "")
+    if not all([email, contact, company_name, department, business_unit, name]):
         return jsonify({"error": "All required fields must be provided"}), 400
     raw_password = generate_password(name)
     role = "admin"
-
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
@@ -57,7 +56,6 @@ def add_admin():
         """, (company_name, subscribers))
         conn.commit()
         group_id = cursor.lastrowid
-
         cursor.execute("""
             INSERT INTO user_list 
             (usrlst_user_group_id, usrlst_name, usrlst_email, usrlst_contact, 
@@ -65,12 +63,12 @@ def add_admin():
              usrlst_last_updated, usrlst_login_flag, usrlst_business_unit,
              usrlst_escalation_mail, usrlst_company_name)
             VALUES (%s, %s, %s, %s, %s, %s, SHA1(%s), NOW(), 0, %s, %s, %s)
-        """, (group_id, name or "", email, contact, role, department, raw_password, business_unit, escalation_mail, company_name))
+        """, (group_id, name, email, contact, role, department, raw_password, business_unit, escalation_mail, company_name))
         conn.commit()
         send_email(
             email,
             "Admin Account Created",
-            f"Hello {name or 'Admin'},\n\nYour admin account has been created.\n\nEmail: {email}\nPassword: {raw_password}\nCompany: {company_name}\n\nRegards,\nTeam PseudoServices"
+            f"Hello {name},\n\nYour admin account has been created.\n\nEmail: {email}\nPassword: {raw_password}\nCompany: {company_name}\n\nRegards,\nTeam PseudoServices"
         )
     except Exception as e:
         conn.rollback()
@@ -84,27 +82,29 @@ def add_admin():
 @user_bp.route('/add', methods=['POST'])
 def add_user():
     data = request.get_json() or {}
-    user_id = data.get("user_id")
-    if not user_id:
-        return jsonify({"error": "user_id is required"}), 400
     name = data.get("name")
     email = data.get("email")
     contact = data.get("contact")
     role = data.get("role", "user")
     department = data.get("department")
     business_unit = data.get("business_unit")
-    escalation_mail = data.get("escalation_mail", "")
     company_name = data.get("company_name", "")
-    if not all([email, contact, department, business_unit, escalation_mail]):
-        return jsonify({"error": "All fields are required"}), 400
+    escalation_mail = data.get("escalation_mail", "")
+    if not all([name, email, contact, department, business_unit, company_name]):
+        return jsonify({"error": "All required fields must be provided"}), 400
     raw_password = generate_password(name)
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute("SELECT usrlst_user_group_id FROM user_list WHERE usrlst_id=%s", (user_id,))
+        cursor.execute("""
+            SELECT u.usrlst_user_group_id 
+            FROM user_list u
+            JOIN user_group g ON u.usrlst_user_group_id = g.usgrp_id
+            WHERE u.usrlst_role='admin' AND g.usgrp_company_name=%s
+        """, (company_name,))
         admin_info = cursor.fetchone()
         if not admin_info:
-            return jsonify({"error": "Admin/user not found"}), 400
+            return jsonify({"error": "No admin found for this company"}), 400
         user_group_id = admin_info["usrlst_user_group_id"]
         cursor.execute("SELECT 1 FROM user_list WHERE usrlst_email=%s OR usrlst_contact=%s", (email, contact))
         if cursor.fetchone():
@@ -113,8 +113,10 @@ def add_user():
         group_limit = cursor.fetchone()
         cursor.execute("SELECT COUNT(*) AS count FROM user_list WHERE usrlst_user_group_id=%s", (user_group_id,))
         user_count = cursor.fetchone()
+
         if user_count["count"] >= group_limit["usgrp_subscribers"]:
             return jsonify({"error": f"User limit of {group_limit['usgrp_subscribers']} reached"}), 400
+
         cursor.execute("""
             INSERT INTO user_list 
             (usrlst_user_group_id, usrlst_name, usrlst_email, usrlst_contact, 
@@ -122,12 +124,12 @@ def add_user():
              usrlst_last_updated, usrlst_login_flag, usrlst_business_unit,
              usrlst_escalation_mail, usrlst_company_name)
             VALUES (%s, %s, %s, %s, %s, %s, SHA1(%s), NOW(), 0, %s, %s, %s)
-        """, (user_group_id, name or "", email, contact, role, department, raw_password, business_unit, escalation_mail, company_name))
+        """, (user_group_id, name, email, contact, role, department, raw_password, business_unit, escalation_mail, company_name))
         conn.commit()
         send_email(
             email,
             "User Account Created",
-            f"Hello {name or 'User'},\n\nYour user account has been created.\n\nEmail: {email}\nPassword: {raw_password}\nCompany: {company_name or 'N/A'}\n\nRegards,\nTeam PseudoServices"
+            f"Hello {name},\n\nYour user account has been created.\n\nEmail: {email}\nPassword: {raw_password}\nCompany: {company_name or 'N/A'}\n\nRegards,\nTeam PseudoServices"
         )
     except Exception as e:
         conn.rollback()
@@ -137,3 +139,32 @@ def add_user():
         cursor.close()
         conn.close()
     return jsonify({"message": "User added successfully"}), 201
+
+@user_bp.route('/list', methods=['GET'])
+def get_user_list():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT 
+                usrlst_id AS id,
+                usrlst_name AS name,
+                usrlst_email AS email,
+                usrlst_contact AS contact,
+                usrlst_role AS role,
+                usrlst_department AS department,
+                usrlst_business_unit AS business_unit,
+                usrlst_escalation_mail AS escalation_mail,
+                usrlst_company_name AS company_name,
+                usrlst_last_updated AS last_updated
+            FROM user_list
+            ORDER BY usrlst_last_updated DESC
+        """)
+        users = cursor.fetchall()
+        return jsonify(users), 200
+    except Exception as e:
+        current_app.logger.exception("Failed to fetch users: %s", e)
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()

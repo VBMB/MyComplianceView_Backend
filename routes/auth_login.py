@@ -6,6 +6,7 @@ login_bp = Blueprint('login_bp', __name__, url_prefix="/login")
 @login_bp.route('/', methods=['POST'])
 def login():
     try:
+
         data = request.get_json()
         if not data:
             return jsonify({"error": "Invalid JSON body"}), 400
@@ -15,8 +16,11 @@ def login():
         if not email or not password:
             return jsonify({"error": "Email and password are required"}), 400
 
+
         conn = get_db_connection()
         cursor = conn.cursor()
+
+
         cursor.execute("""
             SELECT usrlst_id, usrlst_name, usrlst_email, usrlst_role, usrlst_department
             FROM user_list
@@ -29,6 +33,7 @@ def login():
         if not user:
             return jsonify({"error": "Invalid email or password"}), 401
 
+
         role = user.get("usrlst_role", "").lower()
         redirect_to = "/user/dashboard"
         if role == "admin":
@@ -38,6 +43,7 @@ def login():
             message = "User login successful"
         else:
             message = "Login successful"
+
 
         response = {
             "message": message,
