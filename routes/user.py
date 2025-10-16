@@ -114,8 +114,10 @@ def add_user():
         cursor.execute("SELECT COUNT(*) AS count FROM user_list WHERE usrlst_user_group_id=%s", (user_group_id,))
         user_count = cursor.fetchone()
 
-        if user_count["count"] >= group_limit["usgrp_subscribers"]:
-            return jsonify({"error": f"User limit of {group_limit['usgrp_subscribers']} reached"}), 400
+        max_users = group_limit["usgrp_subscribers"] or 2
+
+        if user_count["count"] >= max_users:
+            return jsonify({"error": f"User limit of {max_users} reached"}), 400
 
         cursor.execute("""
             INSERT INTO user_list 
