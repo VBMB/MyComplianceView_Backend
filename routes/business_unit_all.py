@@ -33,7 +33,7 @@ def get_business_units_by_user():
         print("Running query with user_id:", user_id)
         cursor.execute(query, (user_id,))
         rows = cursor.fetchall()
-        print("✅ Rows fetched:", rows)
+        print("Rows fetched:", rows)
 
         if not rows:
             return jsonify({"message": "No business units found for this user"}), 404
@@ -47,11 +47,11 @@ def get_business_units_by_user():
                 "user_group_id": row.get("usrbu_user_group_id"),
             })
 
-        print("👉 Returning result:", result)
+        print("Returning result:", result)
         return jsonify(result), 200
 
     except Exception as e:
-        print("❌ Error fetching business units")
+        print("Error fetching business units")
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
@@ -59,6 +59,6 @@ def get_business_units_by_user():
         try:
             cursor.close()
             conn.close()
-            print("🔒 Database connection closed")
+            print("Database connection closed")
         except:
             pass

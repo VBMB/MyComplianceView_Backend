@@ -1,12 +1,13 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, session
 from database import get_db_connection
+from datetime import datetime
+import bcrypt
 
 login_bp = Blueprint('login_bp', __name__, url_prefix="/login")
 
 @login_bp.route('/', methods=['POST'])
 def login():
     try:
-
         data = request.get_json()
         if not data:
             return jsonify({"error": "Invalid JSON body"}), 400
@@ -16,22 +17,52 @@ def login():
         if not email or not password:
             return jsonify({"error": "Email and password are required"}), 400
 
-
         conn = get_db_connection()
         cursor = conn.cursor()
 
 
         cursor.execute("""
-            SELECT usrlst_id, usrlst_name, usrlst_email, usrlst_role, usrlst_department
+            SELECT usrlst_id, usrlst_name, usrlst_email, usrlst_password, usrlst_role, usrlst_department, usrlst_company_name
             FROM user_list
-            WHERE usrlst_email = %s AND usrlst_password = SHA1(%s)
-        """, (email, password))
+            WHERE usrlst_email = %s
+        """, (email,))
         user = cursor.fetchone()
-        cursor.close()
-        conn.close()
 
         if not user:
+            cursor.close()
+            conn.close()
             return jsonify({"error": "Invalid email or password"}), 401
+
+
+        stored_password = user['usrlst_password'].encode('utf-8')
+        if not bcrypt.checkpw(password.encode('utf-8'), stored_password):
+            cursor.close()
+            conn.close()
+            return jsonify({"error": "Invalid email or password"}), 401
+
+
+        session['user_id'] = user['usrlst_id']
+        session['user_name'] = user['usrlst_name']
+        session['user_email'] = user['usrlst_email']
+        session['user_role'] = user['usrlst_role']
+        session['user_department'] = user['usrlst_department']
+        session['user_company'] = user['usrlst_company_name']
+
+
+        current_date = datetime.now().strftime('%Y-%m-%d')
+        current_time = datetime.now().strftime('%H:%M:%S')
+
+        cursor.execute("""
+            INSERT INTO activity_log (acty_department, acty_email, acty_date, acty_time, acty_action)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (
+            user['usrlst_department'],
+            user['usrlst_email'],
+            current_date,
+            current_time,
+            'Logged In'
+        ))
+        conn.commit()
 
 
         role = user.get("usrlst_role", "").lower()
@@ -44,17 +75,54 @@ def login():
         else:
             message = "Login successful"
 
-
         response = {
             "message": message,
-            "user": user,
+            "user": {
+                "id": user["usrlst_id"],
+                "name": user["usrlst_name"],
+                "email": user["usrlst_email"],
+                "role": user["usrlst_role"],
+                "department": user["usrlst_department"]
+            },
             "redirect_to": redirect_to
         }
 
-        if role == "admin":
-            response["user_dashboard"] = "/user/dashboard"
-
+        cursor.close()
+        conn.close()
         return jsonify(response), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@login_bp.route('/logout', methods=['POST'])
+def logout():
+    try:
+        user_email = session.get('user_email')
+        user_department = session.get('user_department')
+
+        if user_email:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            current_date = datetime.now().strftime('%Y-%m-%d')
+            current_time = datetime.now().strftime('%H:%M:%S')
+
+            cursor.execute("""
+                INSERT INTO activity_log (acty_department, acty_email, acty_date, acty_time, acty_action)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (
+                user_department,
+                user_email,
+                current_date,
+                current_time,
+                'Logged Out'
+            ))
+            conn.commit()
+            cursor.close()
+            conn.close()
+
+        session.clear()
+        return jsonify({"message": "Logged out successfully"}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
