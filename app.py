@@ -47,7 +47,7 @@ def test_db():
 
 
 
-app.register_blueprint(form_bp, url_prefix='/form')
+app.register_blueprint(form_bp, url_prefix="/form")
 app.register_blueprint(user_bp, url_prefix="/user")
 
 
@@ -62,7 +62,7 @@ app.register_blueprint(business_unit_add_bp)
 
 app.register_blueprint(business_unit_all_bp)
 
-app.register_blueprint(user_departments_add_bp, url_prefix="/user/departments")
+app.register_blueprint(user_departments_add_bp)
 
 app.register_blueprint(user_departments_all_bp, url_prefix="/user/departments")
 
