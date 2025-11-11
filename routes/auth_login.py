@@ -55,7 +55,7 @@ def login():
         role = user.get("usrlst_role", "").lower()
         redirect_to = "/user/dashboard"
         if role == "admin":
-            session["admin_id"] = user["usrlst_id"]  # ✅ this is the fix
+            session["admin_id"] = user["usrlst_id"]
             message = "Admin login successful"
             redirect_to = "/admin/dashboard"
         elif role == "user":
@@ -101,7 +101,7 @@ def login():
         return jsonify({"error": str(e)}), 500
 
 
-# ---------------- LOGOUT ----------------
+
 @login_bp.route('/logout', methods=['POST'])
 def logout():
     try:

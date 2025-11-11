@@ -76,3 +76,50 @@ def add_business_unit():
         conn.close()
 
     return jsonify({"message": "Business Unit added successfully"}), 201
+
+
+#updated
+@business_unit_add_bp.route('/edit', methods=['PUT'])
+def edit_business_unit():
+    data = request.get_json()
+
+    if not data:
+        return jsonify({"error": "No JSON data provided"}), 400
+
+    usrbu_id = data.get("usrbu_id")
+    new_business_unit_name = data.get("business_unit_name")
+
+    if not usrbu_id or not new_business_unit_name:
+        return jsonify({"error": "Business Unit ID and new name are required"}), 400
+
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({"error": "Database connection failed"}), 500
+
+    cursor = conn.cursor()
+
+    try:
+
+        cursor.execute("SELECT 1 FROM user_business_unit WHERE usrbu_id = %s", (usrbu_id,))
+        if not cursor.fetchone():
+            return jsonify({"error": "Business Unit not found"}), 404
+
+
+        cursor.execute("""
+            UPDATE user_business_unit
+            SET usrbu_business_unit_name = %s
+            WHERE usrbu_id = %s
+        """, (new_business_unit_name, usrbu_id))
+
+        conn.commit()
+        return jsonify({"message": "Business Unit updated successfully"}), 200
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+
+    finally:
+        cursor.close()
+        conn.close()
+
+

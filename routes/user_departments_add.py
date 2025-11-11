@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, session
 from database import get_db_connection
 
-# ✅ Unique blueprint name
+
 user_departments_add_bp = Blueprint('user_departments_add_unique_bp', __name__, url_prefix="/user/departments")
 
 @user_departments_add_bp.route('/add', methods=['POST'])

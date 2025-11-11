@@ -11,7 +11,7 @@ def submit_form():
     company_name = data.get('company_name')
     govt_document = data.get('govt_document')
     cin = data.get('cin')
-    subscribers = data.get('subscribers', 2)  # ✅ Default to 2 if not provided
+    subscribers = data.get('subscribers', 2)
     end_of_subscription = data.get('end_of_subscription')
 
     # Validate required fields

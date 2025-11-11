@@ -9,7 +9,7 @@ business_unit_all_bp = Blueprint('business_unit_all_bp', __name__, url_prefix="/
 def get_business_units_by_user():
     print("GET /user/business_unit/all called")
 
-    user_id = request.args.get("user_id")  # frontend provides user_id
+    user_id = request.args.get("user_id")
     print("Received user_id:", user_id)
 
     if not user_id:

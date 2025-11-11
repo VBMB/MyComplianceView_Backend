@@ -14,7 +14,11 @@ from routes.compliance import compliance_bp
 from routes.dashboard import dashboard_bp
 from routes.activity_log import activity_log_bp
 from routes.user_update import user_update_bp
-from routes.report import report_bp
+from routes.selfcompli_report import report_bp
+from routes.regulcompli_report import regulcompli_report_bp
+from routes.calendar import calendar_bp
+from routes.form_submission import form_submission_bp
+
 
 app: Flask = Flask(__name__)
 
@@ -50,13 +54,11 @@ def test_db():
 app.register_blueprint(form_bp, url_prefix="/form")
 app.register_blueprint(user_bp, url_prefix="/user")
 
-
 app.register_blueprint(login_bp, url_prefix="/login")
 
 app.register_blueprint(compliance_bp, url_prefix="/compliance")
 
 app.register_blueprint(dashboard_bp, url_prefix="/dashboard")
-
 
 app.register_blueprint(business_unit_add_bp)
 
@@ -71,6 +73,12 @@ app.register_blueprint(activity_log_bp)
 app.register_blueprint(user_update_bp)
 
 app.register_blueprint(report_bp)
+
+app.register_blueprint(calendar_bp)
+
+app.register_blueprint(regulcompli_report_bp)
+
+app.register_blueprint(form_submission_bp)
 
 
 

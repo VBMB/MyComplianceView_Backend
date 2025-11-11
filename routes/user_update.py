@@ -7,7 +7,7 @@ user_update_bp = Blueprint('user_update_bp', __name__, url_prefix="/user_update"
 @user_update_bp.route('/<int:user_id>', methods=['PUT'])
 def update_user(user_id):
     try:
-        # Ensure only admin can update
+
         user_role = session.get('user_role')
         user_company = session.get('user_company')
         admin_email = session.get('user_email')

@@ -120,7 +120,7 @@ def add_compliance():
         return jsonify({"error": str(e)}), 500
 
 
-# 🟣 List all compliances of current user
+
 @compliance_bp.route("/list", methods=["GET"])
 def list_compliances():
     try:
