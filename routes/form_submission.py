@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, session
 import smtplib
 from email.mime.text import MIMEText
 
-form_submission_bp = Blueprint("form_submission_bp", __name__, url_prefix="/form")
+form_submission_bp = Blueprint("form_submission_bp", __name__, url_prefix="/Submission")
 
 def send_email(body):
     SMTP_SERVER = "mail.pseudoteam.com"
