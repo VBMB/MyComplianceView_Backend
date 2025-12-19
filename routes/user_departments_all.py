@@ -24,9 +24,9 @@ def get_departments():
                 ub.usrbu_business_unit_name,
                 ul.usrlst_name AS user_name, 
                 ud.usrdept_user_group_id
-            FROM user_departments ud
-            JOIN user_business_unit ub ON ud.usrdept_business_unit_id = ub.usrbu_id
-            JOIN user_list ul ON ud.usrdept_user_id = ul.usrlst_id
+            FROM user_departments AS ud
+            JOIN user_business_unit AS ub ON ud.usrdept_business_unit_id = ub.usrbu_id
+            JOIN user_list AS ul ON ud.usrdept_user_id = ul.usrlst_id
         """
         cursor.execute(query)
         rows = cursor.fetchall()

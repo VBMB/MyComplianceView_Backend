@@ -67,6 +67,7 @@ def login():
         current_date = datetime.now().strftime('%Y-%m-%d')
         current_time = datetime.now().strftime('%H:%M:%S')
 
+
         cursor.execute("""
             INSERT INTO activity_log (acty_department, acty_email, acty_date, acty_time, acty_action)
             VALUES (%s, %s, %s, %s, %s)

@@ -25,8 +25,8 @@ def get_business_units_by_user():
                    ub.usrbu_business_unit_name,
                    u.usrlst_name AS user_name,
                    ub.usrbu_user_group_id
-            FROM user_business_unit ub
-            LEFT JOIN user_list u ON ub.usrbu_user_id = u.usrlst_id
+            FROM user_business_unit AS ub
+            LEFT JOIN user_list AS u ON ub.usrbu_user_id = u.usrlst_id
             WHERE ub.usrbu_user_id = %s
             ORDER BY ub.usrbu_id DESC
         """

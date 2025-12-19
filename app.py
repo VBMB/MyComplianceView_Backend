@@ -18,6 +18,7 @@ from routes.selfcompli_report import report_bp
 from routes.regulcompli_report import regulcompli_report_bp
 from routes.calendar import calendar_bp
 from routes.form_submission import form_submission_bp
+from routes.assessment import assessment_bp
 
 
 app: Flask = Flask(__name__)
@@ -79,6 +80,8 @@ app.register_blueprint(calendar_bp)
 app.register_blueprint(regulcompli_report_bp)
 
 app.register_blueprint(form_submission_bp)
+
+app.register_blueprint(assessment_bp)
 
 
 
