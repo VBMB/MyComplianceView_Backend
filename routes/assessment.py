@@ -1,67 +1,186 @@
-from flask import Blueprint, request, jsonify, session
+from flask import Blueprint, request, jsonify, session, Response
 import csv
 import io
+from database import get_db_connection
 
 assessment_bp = Blueprint("assessment_bp", __name__, url_prefix="/assessment")
 
-USER_TOTALS = {}
+
+# assessments
+@assessment_bp.route("/list", methods=["GET"])
+def list_assessments():
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT dpdpas_id, dpdp_sheet
+        FROM dpdp_assessment_sheets
+    """)
+    assessments = cur.fetchall()
+
+    return jsonify(assessments), 200
 
 
-def process_csv(file):
-    total = 0
-    yes_count = 0
+# download csv
+@assessment_bp.route("/download/<int:dpdpas_id>", methods=["GET"])
+def download_assessment(dpdpas_id):
+    conn = get_db_connection()
+    cur = conn.cursor()
 
-    stream = io.StringIO(file.stream.read().decode("utf-8"))
-    reader = csv.DictReader(stream)
+    # Get assessment details
+    cur.execute("""
+        SELECT dpdp_sheet, dpdp_answer_column_name
+        FROM dpdp_assessment_sheets
+        WHERE dpdpas_id = %s
+    """, (dpdpas_id,))
+    assessment = cur.fetchone()
 
-    for row in reader:
-        total += 1
-        if row.get("Answer", "").strip().lower() == "yes":
-            yes_count += 1
+    if not assessment:
+        return jsonify({"error": "Assessment not found"}), 404
 
-    return total, yes_count
+    # Get questions
+    cur.execute("""
+        SELECT question
+        FROM dpdp_assessment_questions
+        WHERE dpdpas_id = %s
+    """, (dpdpas_id,))
+    questions = cur.fetchall()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Question", assessment["dpdp_answer_column_name"]])
+
+    for q in questions:
+        writer.writerow([q["question"], ""])
+
+    output.seek(0)
+
+    return Response(
+        output,
+        mimetype="text/csv",
+        headers={
+            "Content-Disposition":
+            f"attachment; filename={assessment['dpdp_sheet']}.csv"
+        }
+    )
 
 
-@assessment_bp.route("/upload", methods=["POST"])
-def upload_assessment():
+
+@assessment_bp.route("/upload/<int:dpdpas_id>", methods=["POST"])
+def upload_assessment(dpdpas_id):
     user_id = session.get("user_id")
+    user_group_id = session.get("user_group_id")
     file = request.files.get("file")
 
     if not user_id:
         return jsonify({"error": "Unauthorized"}), 401
 
     if not file:
-        return jsonify({"error": "file required"}), 400
+        return jsonify({"error": "CSV file required"}), 400
 
-    total, yes_count = process_csv(file)
+    conn = get_db_connection()
+    cur = conn.cursor()
 
-    USER_TOTALS.setdefault(user_id, {"total": 0, "yes": 0})
-    USER_TOTALS[user_id]["total"] += total
-    USER_TOTALS[user_id]["yes"] += yes_count
+    # Get answer column name
+    cur.execute("""
+        SELECT dpdp_answer_column_name
+        FROM dpdp_assessment_sheets
+        WHERE dpdpas_id = %s
+    """, (dpdpas_id,))
+    sheet = cur.fetchone()
 
-    score = round(
-        (USER_TOTALS[user_id]["yes"] / USER_TOTALS[user_id]["total"]) * 100,
-        2
-    )
+    if not sheet:
+        return jsonify({"error": "Assessment not found"}), 404
+
+    answer_col = sheet["dpdp_answer_column_name"]
+
+    stream = io.StringIO(file.stream.read().decode("utf-8"))
+    reader = csv.DictReader(stream)
+
+    total = 0
+    yes_count = 0
+
+
+    cur.execute("""
+        DELETE FROM dpdp_assessment_answers
+        WHERE dpdpans_user_id = %s
+        AND dpdpans_dpdpas_id = %s
+    """, (user_id, dpdpas_id))
+
+    for row in reader:
+        total += 1
+        answer = row[answer_col].strip().lower()
+
+        if answer == "yes":
+            yes_count += 1
+
+        cur.execute("""
+            INSERT INTO dpdp_assessment_answers
+            (dpdpans_user_id, dpdpans_dpdpas_id, dpdpans_question, dpdpans_answer)
+            VALUES (%s, %s, %s, %s)
+        """, (
+            user_id,
+            dpdpas_id,
+            row["Question"],
+            answer
+        ))
+
+    score = round((yes_count / total) * 100, 2)
+
+
+    cur.execute("""
+        DELETE FROM dpdp_assessment_upload
+        WHERE dpdpau_user_id = %s
+        AND dpdpau_dpdpas_key = %s
+    """, (user_id, dpdpas_id))
+
+
+    cur.execute("""
+        INSERT INTO dpdp_assessment_upload
+        (dpdpau_user_id,
+         dpdpau_user_group_id,
+         dpdpau_dpdpas_key,
+         dpdpau_uploaded_sheet,
+         dpdpau_score)
+        VALUES (%s, %s, %s, %s, %s)
+    """, (
+        user_id,
+        user_group_id,
+        dpdpas_id,
+        file.filename,
+        score
+    ))
+
+    conn.commit()
 
     return jsonify({
-        "message": "Assessment uploaded successfully",
-        "overall_score": score
+        "assessment_id": dpdpas_id,
+        "total_questions": total,
+        "yes_answers": yes_count,
+        "score": score
     }), 200
 
 
-@assessment_bp.route("/score", methods=["GET"])
-def get_overall_score():
+
+@assessment_bp.route("/overall-score", methods=["GET"])
+def overall_score():
     user_id = session.get("user_id")
 
     if not user_id:
         return jsonify({"error": "Unauthorized"}), 401
 
-    data = USER_TOTALS.get(user_id)
+    conn = get_db_connection()
+    cur = conn.cursor()
 
-    if not data or data["total"] == 0:
-        return jsonify({"overall_score": None}), 200
+    cur.execute("""
+        SELECT AVG(dpdpau_score) AS overall_score
+        FROM dpdp_assessment_upload
+        WHERE dpdpau_user_id = %s
+    """, (user_id,))
 
-    score = round((data["yes"] / data["total"]) * 100, 2)
+    result = cur.fetchone()
 
-    return jsonify({"overall_score": score}), 200
+    return jsonify({
+        "overall_score": round(result["overall_score"], 2)
+        if result["overall_score"] else None
+    }), 200
