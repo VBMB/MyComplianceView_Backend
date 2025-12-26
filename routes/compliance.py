@@ -208,15 +208,31 @@ def list_compliances():
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT cmplst_id, cmplst_country, cmplst_act, cmplst_particular,
-                   cmplst_start_date, cmplst_end_date, cmplst_action_date, cmplst_description,
-                   cmplst_next_month_date, cmplst_next_day_date,
-                   cmplst_next_remaining_date, cmplst_next_escalation_date,
-                   cmplst_escalation_mail
-            FROM compliance_list
-            WHERE cmplst_user_id = %s
-            ORDER BY cmplst_end_date DESC
-        """, (user_id,))
+                    SELECT
+                        cmplst_id,
+                        cmplst_compliance_key,
+                        cmplst_act,
+                        cmplst_particular,
+                        cmplst_start_date,
+                        cmplst_end_date,
+                        cmplst_action_date,
+                        cmplst_description,
+                        cmplst_country,
+                        cmplst_user_id,
+                        cmplst_actions_completed,
+                        cmplst_month,
+                        cmplst_day,
+                        cmplst_remaining_days,
+                        cmplst_escalation_mail,
+                        cmplst_reminder_on_escalation_mail,
+                        cmplst_next_month_date,
+                        cmplst_next_day_date,
+                        cmplst_next_remaining_date,
+                        cmplst_next_escalation_date
+                    FROM compliance_list
+                    WHERE cmplst_user_id = %s
+                    ORDER BY cmplst_end_date DESC
+                """, (user_id,))
 
         compliances = cursor.fetchall()
         cursor.close()
