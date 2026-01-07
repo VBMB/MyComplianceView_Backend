@@ -33,8 +33,12 @@ CORS(app, supports_credentials=True)
 def home():
     return "Flask is running!"
 
-
-
+#@app.route("/test-login")
+#def test_login():
+#   session['user_id'] = 1
+#  session['user_group_id'] = 1
+#  session['queue_id'] = 1
+#  return "Logged in for testing"
 
 @app.route('/test-db')
 def test_db():

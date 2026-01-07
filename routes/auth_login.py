@@ -24,7 +24,7 @@ def login():
 
         cursor.execute("""
             SELECT usrlst_id, usrlst_name, usrlst_email, usrlst_password,
-                   usrlst_role, usrlst_department, usrlst_company_name
+                   usrlst_role, usrlst_department, usrlst_company_name,usrlst_user_group_id
             FROM user_list
             WHERE usrlst_email = %s
         """, (email,))
@@ -50,6 +50,7 @@ def login():
         session['user_role'] = user['usrlst_role']
         session['user_department'] = user['usrlst_department']
         session['user_company'] = user['usrlst_company_name']
+        session["user_group_id"] = user["usrlst_user_group_id"]
 
         #roles
         role = user.get("usrlst_role", "").lower()
