@@ -128,3 +128,67 @@ def get_departments():
     finally:
         cursor.close()
         conn.close()
+
+# edit
+
+@user_department_bp.route("/edit/<int:department_id>", methods=["PUT"])
+@jwt_required()
+def edit_department(department_id):
+    claims = get_jwt()
+
+
+    if claims.get("role") != "admin":
+        return jsonify({"error": "Admin access required"}), 403
+
+    data = request.get_json() or {}
+    new_department_name = data.get("department_name")
+    user_group_id = claims.get("user_group_id")
+
+    if not new_department_name:
+        return jsonify({"error": "Department name is required"}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+
+        cursor.execute("""
+            SELECT usrdept_department_name
+            FROM user_departments
+            WHERE usrdept_id = %s
+              AND usrdept_user_group_id = %s
+        """, (department_id, user_group_id))
+
+        old_department = cursor.fetchone()
+        if not old_department:
+            return jsonify({"error": "Department not found"}), 404
+
+
+        cursor.execute("""
+            UPDATE user_departments
+            SET usrdept_department_name = %s
+            WHERE usrdept_id = %s
+              AND usrdept_user_group_id = %s
+        """, (new_department_name, department_id, user_group_id))
+
+        conn.commit()
+
+
+        log_activity(
+            user_id=claims.get("user_id"),
+            user_group_id=user_group_id,
+            department=new_department_name,
+            email=claims.get("email"),
+            action=f"Department Updated ({old_department[0]} → {new_department_name})"
+        )
+
+        return jsonify({"message": "Department name updated successfully"}), 200
+
+    except Exception as e:
+        conn.rollback()
+        current_app.logger.exception("Edit department failed")
+        return jsonify({"error": str(e)}), 500
+
+    finally:
+        cursor.close()
+        conn.close()

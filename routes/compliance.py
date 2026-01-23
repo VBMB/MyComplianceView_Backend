@@ -582,3 +582,71 @@ def add_custom_compliance():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# fetch regulatory
+
+@compliance_bp.route("/regulatory", methods=["GET"])
+@jwt_required()
+def fetch_regulatory_compliance():
+    try:
+        user_id = get_jwt().get("sub")
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT *
+            FROM regulatory_compliance
+            WHERE regcmp_user_id = %s
+            ORDER BY regcmp_action_date
+        """, (user_id,))
+
+        records = cursor.fetchall()
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "user_id": user_id,
+            "count": len(records),
+            "data": records
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+
+#fetch custom
+
+@compliance_bp.route("/custom", methods=["GET"])
+@jwt_required()
+def fetch_custom_compliance():
+    try:
+        user_id = get_jwt().get("sub")
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT *
+            FROM self_compliance
+            WHERE slfcmp_user_id = %s
+            ORDER BY slfcmp_action_date
+        """, (user_id,))
+
+        records = cursor.fetchall()
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "user_id": user_id,
+            "count": len(records),
+            "data": records
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
