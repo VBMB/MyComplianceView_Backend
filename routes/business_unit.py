@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt
 from database import get_db_connection
+from utils.activity_logger import log_activity
 
 business_unit_bp = Blueprint(
     "business_unit_bp",
@@ -96,6 +97,16 @@ def add_business_unit():
         """, (business_unit_name, user_id, user_group_id))
 
         conn.commit()
+
+        log_activity(
+            user_id=admin_id,
+            user_group_id=user_group_id,
+            department="Admin",
+            email=claims.get("email"),
+            action=f"Business Unit Added: {business_unit_name}"
+        )
+
+
         return jsonify({"message": "Business unit added successfully"}), 201
 
     except Exception as e:
@@ -146,6 +157,15 @@ def edit_business_unit():
         """, (new_name, usrbu_id))
 
         conn.commit()
+
+        log_activity(
+            user_id=admin_id,
+            user_group_id=user_group_id,
+            department="Admin",
+            email=claims.get("email"),
+            action=f"Business Unit Updated: {old_name} → {new_name}"
+        )
+
         return jsonify({"message": "Business unit updated successfully"}), 200
 
     except Exception as e:

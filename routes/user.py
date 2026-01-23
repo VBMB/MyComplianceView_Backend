@@ -5,6 +5,7 @@ from datetime import datetime
 import bcrypt
 import smtplib
 from email.mime.text import MIMEText
+from utils.activity_logger import log_activity
 
 user_bp = Blueprint("user_bp", __name__, url_prefix="/user")
 
@@ -147,6 +148,14 @@ def add_user():
 
         conn.commit()
 
+        log_activity(
+            user_id=claims.get("sub"),
+            user_group_id=user_group_id,
+            department=data["department"],
+            email=data["email"],
+            action=f"User Created ({data['name']})"
+        )
+
         send_email(
             data["email"],
             "User Account Created",
@@ -227,6 +236,14 @@ def update_user(user_id):
     cursor.close()
     conn.close()
 
+    log_activity(
+        user_id=claims.get("sub"),
+        user_group_id=claims.get("user_group_id"),
+        department=data.get("department", "N/A"),
+        email=claims.get("email"),
+        action=f"User Updated (ID {user_id})"
+    )
+
     return jsonify({"message": "User updated"}), 200
 
 # --------------------------------------------------
@@ -259,5 +276,13 @@ def delete_user():
     conn.commit()
     cursor.close()
     conn.close()
+
+    log_activity(
+        user_id=claims.get("sub"),
+        user_group_id=claims.get("user_group_id"),
+        department="N/A",
+        email=email,
+        action=f"User Deleted ({email})"
+    )
 
     return jsonify({"message": f"User {email} deleted"}), 200
