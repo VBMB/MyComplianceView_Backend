@@ -11,7 +11,7 @@ from routes.business_unit import business_unit_bp
 from routes.compliance import compliance_bp
 from routes.dashboard import dashboard_bp
 from routes.activity_log import activity_log_bp
-from routes.calendar import calendar_bp
+from routes.calender import calender_bp
 from routes.form_submission import form_submission_bp
 from routes.assessment import assessment_bp
 from routes.user_department import user_department_bp
@@ -55,7 +55,7 @@ app.register_blueprint(dashboard_bp, url_prefix="/dashboard")
 app.register_blueprint(user_department_bp)
 app.register_blueprint(business_unit_bp)
 app.register_blueprint(activity_log_bp)
-app.register_blueprint(calendar_bp)
+app.register_blueprint(calender_bp)
 app.register_blueprint(form_submission_bp)
 app.register_blueprint(assessment_bp)
 app.register_blueprint(logout_bp)
