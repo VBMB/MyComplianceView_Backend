@@ -213,7 +213,7 @@ def add_regulatory_compliance():
                 data["regcmp_description"],
                 row.get("cmplst_long_description", ""),
                 row.get("cmplst_title", ""),
-                row["cmplst_id"],
+                data["regcmp_compliance_key"],
                 reminder_days,
                 row["cmplst_start_date"],
                 row["cmplst_end_date"],
