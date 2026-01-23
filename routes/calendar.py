@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from database import get_db_connection
 from datetime import datetime
 from flask_jwt_extended import jwt_required, get_jwt
+from utils.activity_logger import log_activity
 
 calendar_bp = Blueprint('calendar_bp', __name__, url_prefix="/calendar")
 
@@ -33,6 +34,14 @@ def add_event():
             VALUES (%s, %s, %s)
         """, (user_id, cal_date, cal_event))
         conn.commit()
+
+        log_activity(
+            user_id=user_id,
+            user_group_id=user_group_id,
+            department=department,
+            email=email,
+            action=f"Calendar Event Added: {cal_event} on {cal_date}"
+        )
 
         return jsonify({"message": "Event added"}), 201
 
@@ -113,6 +122,14 @@ def edit_event(cal_id):
         if cursor.rowcount == 0:
             return jsonify({"error": "Event not found"}), 404
 
+        log_activity(
+            user_id=user_id,
+            user_group_id=user_group_id,
+            department=department,
+            email=email,
+            action=f"Calendar Event Updated (ID: {cal_id})"
+        )
+
         return jsonify({"message": "Event updated successfully"}), 200
 
     except Exception as e:
@@ -141,6 +158,15 @@ def delete_event(cal_id):
 
         if cursor.rowcount == 0:
             return jsonify({"error": "Event not found or unauthorized"}), 404
+
+        log_activity(
+            user_id=user_id,
+            user_group_id=user_group_id,
+            department=department,
+            email=email,
+            action=f"Calendar Event Deleted (ID: {cal_id})"
+        )
+
 
         return jsonify({"message": "Event deleted successfully"}), 200
 

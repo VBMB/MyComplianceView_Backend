@@ -3,6 +3,7 @@ from flask_jwt_extended import create_access_token
 from database import get_db_connection
 from datetime import datetime
 import bcrypt
+from utils.activity_logger import log_activity
 
 #Change: Updated login and logout routes with improved error handling and logging.
 #Changes made on 2026-01-22 by Sanskar Sharma.
@@ -83,40 +84,49 @@ def login():
         dept_row = cursor.fetchone()
         department_name = dept_row["usrdept_department_name"] if dept_row else "Unknown Department"
 
-        action_message = (
-            f"User ID: {user['usrlst_id']} | "
-            f"User Group ID: {user['usrlst_user_group_id']} | "
-            f"Department: {department_name} | "
-            f"Action: Logged In"
-        )
+      #  action_message = (
+      #     f"User ID: {user['usrlst_id']} | "
+      #     f"User Group ID: {user['usrlst_user_group_id']} | "
+      #     f"Department: {department_name} | "
+      #     f"Action: Logged In"
+      # )
+      #
+      # print("ACTION LOG:", action_message)
+      #
+      # cursor.execute("""
+      #     INSERT INTO activity_log
+      #       (
+      #           acty_department,
+      #           acty_email,
+      #           acty_date,
+      #           acty_time,
+      #           acty_action,
+      #           acty_user_group_id,
+      #           acty_user_id
+      #       )
+      #       VALUES (%s, %s, %s, %s, %s, %s, %s)
+      #   """, (
+      #       department_name,
+      #       user["usrlst_email"],
+      #       datetime.now().strftime("%Y-%m-%d"),
+      #       datetime.now().strftime("%H:%M:%S"),
+      #       action_message,
+      #       user["usrlst_user_group_id"],
+      #       user["usrlst_id"]
+      #   ))
+      #
+      #   conn.commit()
 
-        print("ACTION LOG:", action_message)
-
-        cursor.execute("""
-            INSERT INTO activity_log
-            (
-                acty_department,
-                acty_email,
-                acty_date,
-                acty_time,
-                acty_action,
-                acty_user_group_id,
-                acty_user_id
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """, (
-            department_name,
-            user["usrlst_email"],
-            datetime.now().strftime("%Y-%m-%d"),
-            datetime.now().strftime("%H:%M:%S"),
-            action_message,
-            user["usrlst_user_group_id"],
-            user["usrlst_id"]
-        ))
-
-        conn.commit()
         cursor.close()
         conn.close()
+
+        log_activity(
+            user_id=user["usrlst_id"],
+            user_group_id=user["usrlst_user_group_id"],
+            department=department_name,
+            email=user["usrlst_email"],
+            action="Logged In"
+        )
 
         return jsonify({
             "message": message,
@@ -135,80 +145,3 @@ def login():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
-# ---------------- LOGOUT ----------------
-# @login_bp.route('/logout', methods=['POST'])
-# def logout():
-#     try:
-#         data = request.get_json() or {}
-#         email = data.get("email")
-
-#         if not email:
-#             return jsonify({"error": "Email is required"}), 400
-
-#         conn = get_db_connection()
-#         cursor = conn.cursor()
-
-#         cursor.execute("""
-#             SELECT 
-#                 usrlst_id,
-#                 usrlst_email,
-#                 usrlst_department_id,
-#                 usrlst_user_group_id
-#             FROM user_list
-#             WHERE usrlst_email = %s
-#         """, (email,))
-
-#         user = cursor.fetchone()
-
-#         if not user:
-#             cursor.close()
-#             conn.close()
-#             return jsonify({"error": "User not found"}), 404
-
-#         cursor.execute("""
-#             SELECT usrdept_department_name
-#             FROM user_departments
-#             WHERE usrdept_id = %s
-#         """, (user["usrlst_department_id"],))
-
-#         dept_row = cursor.fetchone()
-#         department_name = dept_row["usrdept_department_name"] if dept_row else "Unknown Department"
-
-#         action_message = (
-#             f"User ID: {user['usrlst_id']} | "
-#             f"User Group ID: {user['usrlst_user_group_id']} | "
-#             f"Department: {department_name} | "
-#             f"Action: Logged Out"
-#         )
-
-#         cursor.execute("""
-#             INSERT INTO activity_log
-#             (
-#                 acty_department,
-#                 acty_email,
-#                 acty_date,
-#                 acty_time,
-#                 acty_action,
-#                 acty_user_group_id,
-#                 acty_user_id
-#             )
-#             VALUES (%s, %s, %s, %s, %s, %s, %s)
-#         """, (
-#             department_name,
-#             user["usrlst_email"],
-#             datetime.now().strftime("%Y-%m-%d"),
-#             datetime.now().strftime("%H:%M:%S"),
-#             action_message,
-#             user["usrlst_user_group_id"],
-#             user["usrlst_id"]
-#         ))
-
-#         conn.commit()
-#         cursor.close()
-#         conn.close()
-
-#         return jsonify({"message": "Logged out successfully"}), 200
-
-#     except Exception as e:
-#         return jsonify({"error": str(e)}), 500

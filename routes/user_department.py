@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt
 from database import get_db_connection
+from utils.activity_logger import log_activity
 
 user_department_bp = Blueprint(
     "user_department_bp",
@@ -34,7 +35,7 @@ def add_department():
     cursor = conn.cursor()
 
     try:
-        # ✅ Validate business unit
+
         cursor.execute(
             "SELECT usrbu_id FROM user_business_unit WHERE usrbu_id=%s",
             (business_unit_id,)
@@ -62,6 +63,14 @@ def add_department():
         """, (business_unit_id, user_id, user_group_id, department_name))
 
         conn.commit()
+
+        log_activity(
+            user_id=admin_id,
+            user_group_id=user_group_id,
+            department=department_name,
+            email=admin_email,
+            action=f"Department Added ({department_name})"
+        )
 
         return jsonify({"message": "Department added successfully"}), 201
 

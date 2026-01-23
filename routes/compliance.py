@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from email.mime.text import MIMEText
 from uuid import uuid4
+from utils.activity_logger import log_activity
 import smtplib
 
 compliance_bp = Blueprint('compliance_bp', __name__, url_prefix="/compliance")
@@ -232,6 +233,14 @@ def add_regulatory_compliance():
         cursor.close()
         conn.close()
 
+        log_activity(
+            user_id=user_id,
+            user_group_id=user_group_id,
+            department="Compliance",
+            email=claims.get("email"),
+            action=f"Regulatory Compliance Added | Act: {data['regcmp_act']} | Country: {data['regcmp_country']}"
+        )
+
         return jsonify({
             "message": "Regulatory compliance added successfully",
             "instances_created": inserted
@@ -390,6 +399,14 @@ def add_custom_compliance():
         conn.commit()
         cursor.close()
         conn.close()
+
+        log_activity(
+            user_id=user_id,
+            user_group_id=user_group_id,
+            department="Compliance",
+            email=claims.get("email"),
+            action=f"Custom Compliance Added | Act: {data['slfcmp_act']} | Instances: {inserted}"
+        )
 
         return jsonify({
             "message": "Custom compliance added successfully",
