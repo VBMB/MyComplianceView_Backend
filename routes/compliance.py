@@ -585,10 +585,99 @@ def add_custom_compliance():
 
 
 # fetch regulatory
-
-@compliance_bp.route("/regulatory", methods=["GET"])
+@compliance_bp.route("/fetch/regulatory", methods=["GET"])
 @jwt_required()
 def fetch_regulatory_compliance():
+    try:
+        user_id = get_jwt().get("sub")
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # cursor.execute("""
+        #     SELECT *
+        #     FROM regulatory_compliance
+        #     WHERE regcmp_user_id = %s
+        #     ORDER BY regcmp_action_date
+        # """, (user_id,))
+
+        cursor.execute("""
+        SELECT rc.*
+        FROM regulatory_compliance rc
+        JOIN (
+        SELECT regcmp_compliance_id, MIN(regcmp_action_date) AS action_date
+        FROM regulatory_compliance
+        WHERE regcmp_user_id = %s
+        GROUP BY regcmp_compliance_id
+        ) t
+        ON rc.regcmp_compliance_id = t.regcmp_compliance_id
+        AND rc.regcmp_action_date = t.action_date
+        WHERE rc.regcmp_user_id = %s
+        ORDER BY rc.regcmp_action_date
+        """, (user_id, user_id))
+
+        records = cursor.fetchall()
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "user_id": user_id,
+            "count": len(records),
+            "data": records
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+#fetch custom
+@compliance_bp.route("/fetch/custom", methods=["GET"])
+@jwt_required()
+def fetch_custom_compliance():
+    try:
+        user_id = get_jwt().get("sub")
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # cursor.execute("""
+        #     SELECT *
+        #     FROM self_compliance
+        #     WHERE slfcmp_user_id = %s
+        #     ORDER BY slfcmp_action_date
+        # """, (user_id,))
+
+        cursor.execute("""
+        SELECT sc.*
+        FROM self_compliance sc
+        JOIN (
+        SELECT slfcmp_compliance_id, MIN(slfcmp_id) AS min_id
+        FROM self_compliance
+        WHERE slfcmp_user_id = %s
+        GROUP BY slfcmp_compliance_id
+        ) t
+        ON sc.slfcmp_id = t.min_id
+        WHERE sc.slfcmp_user_id = %s
+        ORDER BY sc.slfcmp_action_date
+        """, (user_id, user_id))
+
+        records = cursor.fetchall()
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "user_id": user_id,
+            "count": len(records),
+            "data": records
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+@compliance_bp.route("/fetch/regulatory/<int:compliance_id>", methods=["GET"])
+@jwt_required()
+def fetch_regulatory_compliance_instances(compliance_id):
     try:
         user_id = get_jwt().get("sub")
 
@@ -599,8 +688,9 @@ def fetch_regulatory_compliance():
             SELECT *
             FROM regulatory_compliance
             WHERE regcmp_user_id = %s
+              AND regcmp_compliance_id = %s
             ORDER BY regcmp_action_date
-        """, (user_id,))
+        """, (user_id, compliance_id))
 
         records = cursor.fetchall()
 
@@ -609,6 +699,7 @@ def fetch_regulatory_compliance():
 
         return jsonify({
             "user_id": user_id,
+            "compliance_id": compliance_id,
             "count": len(records),
             "data": records
         }), 200
@@ -616,81 +707,186 @@ def fetch_regulatory_compliance():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
-
-#fetch custom
-
-@compliance_bp.route("/custom", methods=["GET"])
+@compliance_bp.route("/edit/regulatory/<int:regcmp_id>", methods=["GET"])
 @jwt_required()
-def fetch_custom_compliance():
+def get_regulatory_compliance_for_edit(regcmp_id):
     try:
-        user_id = get_jwt().get("sub")
+        claims = get_jwt()
+        user_id = claims.get("sub")
 
         conn = get_db_connection()
         cursor = conn.cursor()
 
         cursor.execute("""
             SELECT *
-            FROM self_compliance
-            WHERE slfcmp_user_id = %s
-            ORDER BY slfcmp_action_date
-        """, (user_id,))
+            FROM regulatory_compliance
+            WHERE regcmp_id = %s
+              AND regcmp_user_id = %s
+            LIMIT 1
+        """, (regcmp_id, user_id))
 
-        records = cursor.fetchall()
+        record = cursor.fetchone()
 
         cursor.close()
         conn.close()
 
+        if not record:
+            return jsonify({
+                "error": "Compliance not found or unauthorized"
+            }), 404
+
         return jsonify({
-            "user_id": user_id,
-            "count": len(records),
-            "data": records
+            "data": record
         }), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
-
-# manage compliances
-
 # regulatory compliance edit
+# @compliance_bp.route("/edit/regulatory/<int:regcmp_id>", methods=["PUT"])
+# @jwt_required()
+# def edit_regulatory_action_date(regcmp_id):
+#     try:
+#         claims = get_jwt()
+#         user_id = claims.get("sub")
+#         user_group_id = claims.get("user_group_id")
 
-@compliance_bp.route("/regulatory/<int:regcmp_id>", methods=["PUT"])
+#         data = request.get_json()
+
+#         if not data or "regcmp_id" not in data:
+#             return jsonify({
+#                 "error": "regcmp_id not found!"
+#             }), 400
+
+#         if not data or "regcmp_action_date" not in data:
+#             return jsonify({
+#                 "error": "Only regcmp_action_date is allowed"
+#             }), 400
+
+#         new_action_date = data["regcmp_action_date"]
+
+#         conn = get_db_connection()
+#         cursor = conn.cursor()
+
+#         cursor.execute("""
+#             UPDATE regulatory_compliance
+#             SET regcmp_action_date = %s
+#             WHERE regcmp_id = %s
+#               AND regcmp_user_id = %s
+#         """, (new_action_date, regcmp_id, user_id))
+
+#         conn.commit()
+
+#         if cursor.rowcount == 0:
+#             cursor.close()
+#             conn.close()
+#             return jsonify({
+#                 "error": "Not found or unauthorized"
+#             }), 403
+
+
+#         cursor.close()
+#         conn.close()
+
+#         log_activity(
+#             user_id=user_id,
+#             user_group_id=user_group_id,
+#             department="Compliance",
+#             email=claims.get("email"),
+#             action=f"Regulatory Compliance Action Date Updated | ID: {regcmp_id} | New Date: {new_action_date}"
+#         )
+
+#         return jsonify({
+#             "message": "Action date updated successfully",
+#             "regcmp_action_date": new_action_date
+#         }), 200
+
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
+
+@compliance_bp.route("/edit/regulatory/<int:regcmp_id>", methods=["PUT"])
 @jwt_required()
-def edit_regulatory_action_date(regcmp_id):
+def edit_regulatory_compliance(regcmp_id):
     try:
         claims = get_jwt()
         user_id = claims.get("sub")
         user_group_id = claims.get("user_group_id")
 
         data = request.get_json()
-        if not data or "regcmp_action_date" not in data:
-            return jsonify({
-                "error": "Only regcmp_action_date is allowed"
-            }), 400
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
 
-        new_action_date = data["regcmp_action_date"]
+        allowed_fields = {
+            "regcmp_action_date",
+            "regcmp_reminder_days",
+            "regcmp_escalation_email",
+            "regcmp_escalation_reminder_days"
+        }
+
+        updates = {}
+        values = []
+
+        for field in allowed_fields:
+            if field in data:
+                value = data[field]
+
+                if field == "regcmp_action_date":
+                    try:
+                        datetime.strptime(value, "%Y-%m-%d")
+                    except ValueError:
+                        return jsonify({
+                            "error": "Invalid date format. Use YYYY-MM-DD"
+                        }), 400
+
+                if field in ("regcmp_reminder_days", "regcmp_escalation_reminder_days"):
+                    if not str(value).isdigit() or int(value) < 0:
+                        return jsonify({
+                            "error": f"{field} must be a non-negative integer"
+                        }), 400
+
+                updates[field] = value
+
+        if not updates:
+            return jsonify({
+                "error": "No valid fields to update"
+            }), 400
 
         conn = get_db_connection()
         cursor = conn.cursor()
 
         cursor.execute("""
-            UPDATE regulatory_compliance
-            SET regcmp_action_date = %s
+            SELECT regcmp_status
+            FROM regulatory_compliance
             WHERE regcmp_id = %s
               AND regcmp_user_id = %s
-        """, (new_action_date, regcmp_id, user_id))
+        """, (regcmp_id, user_id))
 
-        conn.commit()
+        row = cursor.fetchone()
 
-        if cursor.rowcount == 0:
+        if not row:
+            cursor.close()
+            conn.close()
+            return jsonify({"error": "Compliance not found"}), 404
+
+        if row["regcmp_status"] != "Pending":
             cursor.close()
             conn.close()
             return jsonify({
-                "error": "Not found or unauthorized"
+                "error": "Only Pending compliances can be edited"
             }), 403
 
+        set_clause = ", ".join([f"{k} = %s" for k in updates.keys()])
+        values.extend(updates.values())
+        values.extend([regcmp_id, user_id])
+
+        cursor.execute(f"""
+            UPDATE regulatory_compliance
+            SET {set_clause}
+            WHERE regcmp_id = %s
+              AND regcmp_user_id = %s
+        """, tuple(values))
+
+        conn.commit()
 
         cursor.close()
         conn.close()
@@ -700,12 +896,13 @@ def edit_regulatory_action_date(regcmp_id):
             user_group_id=user_group_id,
             department="Compliance",
             email=claims.get("email"),
-            action=f"Regulatory Compliance Action Date Updated | ID: {regcmp_id} | New Date: {new_action_date}"
+            action=f"Regulatory Compliance Updated | ID: {regcmp_id} | Fields: {', '.join(updates.keys())}"
         )
 
         return jsonify({
-            "message": "Action date updated successfully",
-            "regcmp_action_date": new_action_date
+            "message": "Compliance updated successfully",
+            "regcmp_id": regcmp_id,
+            "updated_fields": updates
         }), 200
 
     except Exception as e:
