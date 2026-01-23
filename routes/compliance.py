@@ -650,3 +650,122 @@ def fetch_custom_compliance():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
+
+# manage compliances
+
+# regulatory compliance edit
+
+@compliance_bp.route("/regulatory/<int:regcmp_id>", methods=["PUT"])
+@jwt_required()
+def edit_regulatory_action_date(regcmp_id):
+    try:
+        claims = get_jwt()
+        user_id = claims.get("sub")
+        user_group_id = claims.get("user_group_id")
+
+        data = request.get_json()
+        if not data or "regcmp_action_date" not in data:
+            return jsonify({
+                "error": "Only regcmp_action_date is allowed"
+            }), 400
+
+        new_action_date = data["regcmp_action_date"]
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            UPDATE regulatory_compliance
+            SET regcmp_action_date = %s
+            WHERE regcmp_id = %s
+              AND regcmp_user_id = %s
+        """, (new_action_date, regcmp_id, user_id))
+
+        conn.commit()
+
+        if cursor.rowcount == 0:
+            cursor.close()
+            conn.close()
+            return jsonify({
+                "error": "Not found or unauthorized"
+            }), 403
+
+
+        cursor.close()
+        conn.close()
+
+        log_activity(
+            user_id=user_id,
+            user_group_id=user_group_id,
+            department="Compliance",
+            email=claims.get("email"),
+            action=f"Regulatory Compliance Action Date Updated | ID: {regcmp_id} | New Date: {new_action_date}"
+        )
+
+        return jsonify({
+            "message": "Action date updated successfully",
+            "regcmp_action_date": new_action_date
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# custom compliance edit
+
+@compliance_bp.route("/custom/<int:slfcmp_id>", methods=["PUT"])
+@jwt_required()
+def edit_custom_action_date(slfcmp_id):
+    try:
+        claims = get_jwt()
+        user_id = claims.get("sub")
+        user_group_id = claims.get("user_group_id")
+
+        data = request.get_json()
+        if not data or "slfcmp_action_date" not in data:
+            return jsonify({
+                "error": "Only slfcmp_action_date is allowed"
+            }), 400
+
+        new_action_date = data["slfcmp_action_date"]
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            UPDATE self_compliance
+            SET slfcmp_action_date = %s
+            WHERE slfcmp_id = %s
+              AND slfcmp_user_id = %s
+        """, (new_action_date, slfcmp_id, user_id))
+
+        conn.commit()
+
+        if cursor.rowcount == 0:
+            cursor.close()
+            conn.close()
+            return jsonify({
+                "error": "Not found or unauthorized"
+            }), 403
+
+
+        cursor.close()
+        conn.close()
+
+        log_activity(
+            user_id=user_id,
+            user_group_id=user_group_id,
+            department="Compliance",
+            email=claims.get("email"),
+            action=f"Custom Compliance Action Date Updated | ID: {slfcmp_id} | New Date: {new_action_date}"
+        )
+
+        return jsonify({
+            "message": "Action date updated successfully",
+            "slfcmp_action_date": new_action_date
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
