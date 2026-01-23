@@ -6,7 +6,7 @@ def get_db_connection():
         host='localhost',
         user='root',
         password='',
-        database='mycomplianceview',
+        database='mcv',
         port=3306,
         cursorclass=DictCursor
 

@@ -1,53 +1,98 @@
-from flask import Blueprint, jsonify, session
+from flask import Blueprint, jsonify
+from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from database import get_db_connection
 
 dashboard_bp = Blueprint('dashboard_bp', __name__, url_prefix="/dashboard")
 
 @dashboard_bp.route('/summary', methods=['GET'])
+@jwt_required()
 def dashboard_summary():
     try:
-        user_id = session.get('user_id')
+        # JWT identity is stored as STRING → convert to int
+        claims = get_jwt()
+        user_group_id = claims.get("user_group_id")
+        user_id = get_jwt_identity()
+
         if not user_id:
             return jsonify({"error": "Unauthorized"}), 401
+        
+        if not user_group_id:
+            return jsonify({"error": "User group not found"}), 401
+
+        try:
+            user_id = int(user_id)
+        except ValueError:
+            return jsonify({"error": "Invalid user identity"}), 401
 
         conn = get_db_connection()
         cursor = conn.cursor()
 
+        # Total compliances
+        # cursor.execute("""
+        #     SELECT COUNT(*) AS total_compliances
+        #     FROM compliance_list
+        #     WHERE cmplst_user_id = %s
+        # """, (user_id,))
+        # total_compliances = cursor.fetchone()["total_compliances"]
+
+        #Added by Sanskar Sharma to include both regulatory and self compliances
         cursor.execute("""
-            SELECT COUNT(*) AS total_compliances
-            FROM compliance_list
-            WHERE cmplst_user_id = %s
-        """, (user_id,))
+        SELECT 
+        (
+            SELECT COUNT(*) 
+            FROM regulatory_compliance 
+            WHERE regcmp_user_id = %s
+        ) +
+        (
+            SELECT COUNT(*) 
+            FROM self_compliance 
+            WHERE slfcmp_user_id = %s
+        ) AS total_compliances
+        """, (user_id, user_id))
         total_compliances = cursor.fetchone()["total_compliances"]
+
+
+        # Total departments
+        # cursor.execute("""
+        #     SELECT COUNT(*) AS total_departments
+        #     FROM user_departments
+        #     WHERE usrdept_user_group_id = %s
+        # """, (user_id,))
+        # total_departments = cursor.fetchone()["total_departments"]
 
         cursor.execute("""
             SELECT COUNT(*) AS total_departments
             FROM user_departments
-            WHERE usrdept_user_id = %s
-        """, (user_id,))
+            WHERE usrdept_user_group_id = %s
+        """, (user_group_id,))
         total_departments = cursor.fetchone()["total_departments"]
 
-        cursor.execute("""
-            SELECT 
-                COALESCE(SUM(
-                    (TIMESTAMPDIFF(MONTH, cmplst_start_date, cmplst_end_date) + 1)
-                    - COALESCE(cmplst_actions_completed, 0)
-                ), 0) AS total_pending_actions
-            FROM compliance_list
-            WHERE cmplst_user_id = %s
-        """, (user_id,))
-        total_pending_actions = cursor.fetchone()["total_pending_actions"]
+        # Pending actions
+        # cursor.execute("""
+        #     SELECT 
+        #         COALESCE(SUM(
+        #             (TIMESTAMPDIFF(MONTH, cmplst_start_date, cmplst_end_date) + 1)
+        #             - COALESCE(cmplst_actions_completed, 0)
+        #         ), 0) AS total_pending_actions
+        #     FROM compliance_list
+        #     WHERE cmplst_user_id = %s
+        # """, (user_id,))
+        # total_pending_actions = cursor.fetchone()["total_pending_actions"]
 
+        # Subscription end date
         cursor.execute("""
-            SELECT g.usgrp_end_of_subscription
-            FROM user_group g
-            JOIN user_list u ON u.usrlst_user_group_id = g.usgrp_id
-            WHERE u.usrlst_id = %s
-        """, (user_id,))
-        subscription_end = cursor.fetchone()
-        subscription_end_date = None
-        if subscription_end and subscription_end["usgrp_end_of_subscription"]:
-            subscription_end_date = subscription_end["usgrp_end_of_subscription"].strftime("%d-%m-%Y")
+            SELECT usgrp_end_of_subscription
+            FROM user_group
+            WHERE usgrp_id = %s
+        """, (user_group_id,))
+
+        row = cursor.fetchone()
+
+        subscription_end_date = (
+            row["usgrp_end_of_subscription"].strftime("%d-%m-%Y")
+                if row and row.get("usgrp_end_of_subscription")
+                    else None
+        )
 
         cursor.close()
         conn.close()
@@ -55,7 +100,6 @@ def dashboard_summary():
         return jsonify({
             "total_compliances": total_compliances,
             "total_departments": total_departments,
-            "total_actions": total_pending_actions,
             "subscription_end_date": subscription_end_date
         }), 200
 

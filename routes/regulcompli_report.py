@@ -34,7 +34,7 @@ def add_regulatory_compliance():
         cursor = conn.cursor()
 
         cursor.execute("""
-            INSERT INTO regular_compliance (
+            INSERT INTO regulatory_compliance (
                 regcmp_compliance_id,
                 regcmp_compliance_key,
                 regcmp_remind_before_days,
@@ -78,7 +78,7 @@ def get_all_regulatory_compliances():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM regular_compliance ORDER BY regcmp_requested_date ASC")
+        cursor.execute("SELECT * FROM regulatory_compliance ORDER BY regcmp_requested_date ASC")
         compliances = [decode_bytes(row) for row in cursor.fetchall()]
         return jsonify(compliances), 200
     except Exception as e:
@@ -95,7 +95,7 @@ def get_upcoming_regulatory_compliances():
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT * FROM regular_compliance
+            SELECT * FROM regulatory_compliance
             WHERE regcmp_status='Upcoming'
             ORDER BY regcmp_requested_date ASC
         """)
@@ -115,7 +115,7 @@ def get_approved_regulatory_compliances():
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT * FROM regular_compliance
+            SELECT * FROM regulatory_compliance
             WHERE regcmp_status='Approved'
             ORDER BY regcmp_requested_date ASC
         """)

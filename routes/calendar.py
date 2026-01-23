@@ -1,38 +1,40 @@
-from flask import Blueprint, request, jsonify, session
+from flask import Blueprint, request, jsonify
 from database import get_db_connection
 from datetime import datetime
+from flask_jwt_extended import jwt_required, get_jwt
 
 calendar_bp = Blueprint('calendar_bp', __name__, url_prefix="/calendar")
 
-# event add
+
+# ---------------- ADD EVENT ----------------
 @calendar_bp.route('/add', methods=['POST'])
+@jwt_required()
 def add_event():
     try:
         data = request.get_json()
         if not data:
             return jsonify({"error": "Invalid JSON body"}), 400
 
-        user_id = session.get('user_id')
+        claims = get_jwt()
+        user_id = claims.get("sub")  # identity is stored as "sub"
         if not user_id:
             return jsonify({"error": "Unauthorized"}), 401
 
         cal_date = data.get("date")
         cal_event = data.get("event")
-
         if not cal_date or not cal_event:
             return jsonify({"error": "Date and event are required"}), 400
 
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        query = """
+        cursor.execute("""
             INSERT INTO compliance_calendar (cal_user_id, cal_date, cal_event)
             VALUES (%s, %s, %s)
-        """
-        cursor.execute(query, (user_id, cal_date, cal_event))
+        """, (user_id, cal_date, cal_event))
         conn.commit()
 
-        return jsonify({"message": "Event added "}), 201
+        return jsonify({"message": "Event added"}), 201
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -41,24 +43,24 @@ def add_event():
         conn.close()
 
 
-# get events
+# ---------------- LIST EVENTS ----------------
 @calendar_bp.route('/list', methods=['GET'])
+@jwt_required()
 def list_events():
     try:
-        user_id = session.get('user_id')
+        user_id = get_jwt().get("sub")
         if not user_id:
             return jsonify({"error": "Unauthorized"}), 401
 
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        query = """
+        cursor.execute("""
             SELECT cal_id, cal_date, cal_event, created_at
             FROM compliance_calendar
             WHERE cal_user_id = %s
             ORDER BY cal_date ASC
-        """
-        cursor.execute(query, (user_id,))
+        """, (user_id,))
         events = cursor.fetchall()
 
         return jsonify(events), 200
@@ -70,29 +72,24 @@ def list_events():
         conn.close()
 
 
-# edit event
-
+# ---------------- EDIT EVENT ----------------
 @calendar_bp.route('/edit/<int:cal_id>', methods=['PUT'])
+@jwt_required()
 def edit_event(cal_id):
     try:
         data = request.get_json()
         if not data:
             return jsonify({"error": "Invalid JSON body"}), 400
 
-        user_id = session.get('user_id')
+        user_id = get_jwt().get("sub")
         if not user_id:
             return jsonify({"error": "Unauthorized"}), 401
 
         cal_date = data.get("date")
         cal_event = data.get("event")
-
         if not cal_date and not cal_event:
             return jsonify({"error": "Nothing to update"}), 400
 
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        # query
         updates = []
         values = []
         if cal_date:
@@ -102,15 +99,15 @@ def edit_event(cal_id):
             updates.append("cal_event = %s")
             values.append(cal_event)
 
-        values.append(user_id)
-        values.append(cal_id)
+        values.extend([user_id, cal_id])
 
-        query = f"""
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(f"""
             UPDATE compliance_calendar
             SET {', '.join(updates)}
             WHERE cal_user_id = %s AND cal_id = %s
-        """
-        cursor.execute(query, tuple(values))
+        """, tuple(values))
         conn.commit()
 
         if cursor.rowcount == 0:
@@ -125,23 +122,21 @@ def edit_event(cal_id):
         conn.close()
 
 
-
-#delete event
+# ---------------- DELETE EVENT ----------------
 @calendar_bp.route('/delete/<int:cal_id>', methods=['DELETE'])
+@jwt_required()
 def delete_event(cal_id):
     try:
-        user_id = session.get('user_id')
+        user_id = get_jwt().get("sub")
         if not user_id:
             return jsonify({"error": "Unauthorized"}), 401
 
         conn = get_db_connection()
         cursor = conn.cursor()
-
-        query = """
+        cursor.execute("""
             DELETE FROM compliance_calendar
             WHERE cal_user_id = %s AND cal_id = %s
-        """
-        cursor.execute(query, (user_id, cal_id))
+        """, (user_id, cal_id))
         conn.commit()
 
         if cursor.rowcount == 0:

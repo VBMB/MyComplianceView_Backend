@@ -1,13 +1,13 @@
-from flask import Blueprint, request, jsonify, session
+from flask import Blueprint, request, jsonify
+from flask_jwt_extended import jwt_required, get_jwt
 from database import get_db_connection
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from email.mime.text import MIMEText
+from uuid import uuid4
 import smtplib
 
 compliance_bp = Blueprint('compliance_bp', __name__, url_prefix="/compliance")
-
-
 
 def send_email(to_email, subject, body):
     SMTP_SERVER = "mail.pseudoteam.com"
@@ -26,7 +26,6 @@ def send_email(to_email, subject, body):
         server.sendmail(SENDER_EMAIL, to_email, msg.as_string())
 
 
-# reminder
 def calculate_reminders(action_date_str, month_before, day_before, remaining_days_before, escalation_days):
     action_date = datetime.strptime(action_date_str, "%Y-%m-%d")
 
@@ -35,7 +34,6 @@ def calculate_reminders(action_date_str, month_before, day_before, remaining_day
     remaining_days_reminder = action_date - timedelta(days=remaining_days_before) if remaining_days_before else None
     escalation_reminder = action_date - timedelta(days=escalation_days) if escalation_days else None
 
-# date
     return (
         month_reminder.strftime("%Y-%m-%d") if month_reminder else None,
         day_reminder.strftime("%Y-%m-%d") if day_reminder else None,
@@ -43,29 +41,39 @@ def calculate_reminders(action_date_str, month_before, day_before, remaining_day
         escalation_reminder.strftime("%Y-%m-%d") if escalation_reminder else None
     )
 
+def calculate_reminder_date(action_date, reminder_days):
+    if not reminder_days:
+        return None
 
+    action_date = datetime.strptime(action_date, "%Y-%m-%d")
+    return (action_date - timedelta(days=int(reminder_days))).strftime("%Y-%m-%d")
 
 @compliance_bp.route("/countries", methods=["GET"])
+@jwt_required()
 def get_countries():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
+
         cursor.execute("""
             SELECT DISTINCT cmplst_country
             FROM compliance_list
             WHERE cmplst_country IS NOT NULL
             ORDER BY cmplst_country
         """)
+
         countries = [row["cmplst_country"] for row in cursor.fetchall()]
+
         cursor.close()
         conn.close()
+
         return jsonify({"countries": countries}), 200
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
-
 @compliance_bp.route("/acts", methods=["GET"])
+@jwt_required()
 def get_acts_by_country():
     try:
         country = request.args.get("country")
@@ -74,169 +82,320 @@ def get_acts_by_country():
 
         conn = get_db_connection()
         cursor = conn.cursor()
+
         cursor.execute("""
             SELECT DISTINCT cmplst_act
             FROM compliance_list
             WHERE cmplst_country = %s AND cmplst_act IS NOT NULL
             ORDER BY cmplst_act
         """, (country,))
+
         acts = [row["cmplst_act"] for row in cursor.fetchall()]
+
         cursor.close()
         conn.close()
+
         return jsonify({"country": country, "acts": acts}), 200
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
-
 @compliance_bp.route("/filter", methods=["GET"])
+@jwt_required()
 def get_compliance_by_act_and_country():
     try:
         country = request.args.get("country")
         act = request.args.get("act")
+
         if not country or not act:
             return jsonify({"error": "country and act parameters are required"}), 400
 
         conn = get_db_connection()
         cursor = conn.cursor()
+
         cursor.execute("""
-            SELECT cmplst_particular, cmplst_description
+            SELECT *
             FROM compliance_list
             WHERE cmplst_country = %s AND cmplst_act = %s
         """, (country, act))
+
         records = cursor.fetchall()
+
         cursor.close()
         conn.close()
-        return jsonify({"country": country, "act": act, "records": records}), 200
+
+        return jsonify({"records": records}), 200
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
-
-@compliance_bp.route("/add", methods=["POST"])
-def add_compliance():
+@compliance_bp.route("/add/regulatory", methods=["POST"])
+@jwt_required()
+def add_regulatory_compliance():
     try:
-        user_id = session.get("user_id")
-        if not user_id:
-            return jsonify({"error": "Unauthorized"}), 401
+        claims = get_jwt()
+        user_id = claims.get("sub")
+        user_group_id = claims.get("user_group_id")
 
         data = request.get_json()
+        if not data:
+            return jsonify({"error": "Invalid JSON body"}), 400
+
         required_fields = [
-            "cmplst_compliance_key", "cmplst_country", "cmplst_act",
-            "cmplst_particular", "cmplst_start_date", "cmplst_end_date",
-            "cmplst_action_date", "cmplst_description",
-            "cmplst_month", "cmplst_day", "cmplst_remaining_days",
-            "cmplst_escalation_mail", "cmplst_reminder_on_escalation_mail"
+            "regcmp_country",
+            "regcmp_act",
+            "regcmp_particular",
+            "regcmp_compliance_key",
+            "regcmp_description",
+            "regcmp_reminder_days",
+            "regcmp_escalation_email",
+            "regcmp_escalation_reminder_days"
         ]
+
         for field in required_fields:
-            if field not in data:
+            if field not in data or str(data[field]).strip() == "":
                 return jsonify({"error": f"Missing field: {field}"}), 400
 
-        month_reminder, day_reminder, remaining_days_reminder, escalation_reminder = calculate_reminders(
-            data["cmplst_action_date"],
-            int(data["cmplst_month"]),
-            int(data["cmplst_day"]),
-            int(data["cmplst_remaining_days"]),
-            int(data["cmplst_reminder_on_escalation_mail"])
-        )
+        reminder_days = int(data["regcmp_reminder_days"])
+        escalation_days = int(data["regcmp_escalation_reminder_days"])
 
         conn = get_db_connection()
         cursor = conn.cursor()
+
         cursor.execute("""
-            INSERT INTO compliance_list (
-                cmplst_user_id, cmplst_compliance_key, cmplst_country,
-                cmplst_act, cmplst_particular, cmplst_start_date,
-                cmplst_end_date, cmplst_action_date, cmplst_description,
-                cmplst_month, cmplst_day, cmplst_remaining_days,
-                cmplst_escalation_mail, cmplst_reminder_on_escalation_mail,
-                cmplst_next_month_date, cmplst_next_day_date,
-                cmplst_next_remaining_date, cmplst_next_escalation_date
-            )
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            SELECT *
+            FROM compliance_list
+            WHERE cmplst_country = %s
+              AND cmplst_act = %s
+              AND cmplst_particular = %s
+              AND cmplst_compliance_key = %s
         """, (
-            user_id,
-            data["cmplst_compliance_key"],
-            data["cmplst_country"],
-            data["cmplst_act"],
-            data["cmplst_particular"],
-            data["cmplst_start_date"],
-            data["cmplst_end_date"],
-            data["cmplst_action_date"],
-            data["cmplst_description"],
-            data["cmplst_month"],
-            data["cmplst_day"],
-            data["cmplst_remaining_days"],
-            data["cmplst_escalation_mail"],
-            data["cmplst_reminder_on_escalation_mail"],
-            month_reminder,
-            day_reminder,
-            remaining_days_reminder,
-            escalation_reminder
+            data["regcmp_country"],
+            data["regcmp_act"],
+            data["regcmp_particular"],
+            data["regcmp_compliance_key"]
         ))
+
+        master_rows = cursor.fetchall()
+
+        if not master_rows:
+            cursor.close()
+            conn.close()
+            return jsonify({"error": "No matching compliance found"}), 404
+
+        inserted = 0
+
+        for row in master_rows:
+            cursor.execute("""
+                INSERT INTO regulatory_compliance (
+                    regcmp_act,
+                    regcmp_particular,
+                    regcmp_description,
+                    regcmp_long_description,
+                    regcmp_title,
+                    regcmp_compliance_id,
+                    regcmp_reminder_days,
+                    regcmp_start_date,
+                    regcmp_end_date,
+                    regcmp_action_date,
+                    regcmp_status,
+                    regcmp_escalation_email,
+                    regcmp_escalation_reminder_days,
+                    regcmp_requested_date,
+                    regcmp_original_action_date,
+                    regcmp_user_id,
+                    regcmp_user_group_id
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """, (
+                row["cmplst_act"],
+                row["cmplst_particular"],
+                data["regcmp_description"],
+                row.get("cmplst_long_description", ""),
+                row.get("cmplst_title", ""),
+                row["cmplst_id"],
+                reminder_days,
+                row["cmplst_start_date"],
+                row["cmplst_end_date"],
+                row["cmplst_action_date"], 
+                "Pending",
+                data["regcmp_escalation_email"],
+                escalation_days,
+                datetime.now().strftime("%Y-%m-%d"),
+                row["cmplst_action_date"],
+                user_id,
+                user_group_id
+            ))
+
+            inserted += 1
 
         conn.commit()
         cursor.close()
         conn.close()
 
-        if data["cmplst_escalation_mail"]:
-            send_email(
-                data["cmplst_escalation_mail"],
-                "Compliance Escalation Alert",
-                f"Action Date: {data['cmplst_action_date']}\nEscalation Reminder Date: {escalation_reminder}"
-            )
-
         return jsonify({
-            "message": "Compliance added successfully",
-            "month_reminder": month_reminder,
-            "day_reminder": day_reminder,
-            "remaining_days_reminder": remaining_days_reminder,
-            "escalation_reminder": escalation_reminder
+            "message": "Regulatory compliance added successfully",
+            "instances_created": inserted
         }), 201
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-
-
-@compliance_bp.route("/list", methods=["GET"])
-def list_compliances():
+    
+@compliance_bp.route("/add/custom", methods=["POST"])
+@jwt_required()
+def add_custom_compliance():
     try:
-        user_id = session.get("user_id")
-        if not user_id:
-            return jsonify({"error": "Unauthorized"}), 401
+        claims = get_jwt()
+        user_id = claims.get("sub")
+        user_group_id = claims.get("user_group_id")
+
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Invalid JSON body"}), 400
+
+        required_fields = [
+            "slfcmp_act",
+            "slfcmp_particular",
+            "slfcmp_description",
+            "slfcmp_long_description",
+            "slfcmp_title",
+            "slfcmp_reminder_days",
+            "slfcmp_start_date",
+            "slfcmp_end_date",
+            "slfcmp_action_date",
+            "slfcmp_escalation_email",
+            "slfcmp_escalation_reminder_days",
+            "repeat_type"      
+        ]
+
+        for field in required_fields:
+            if field not in data or str(data[field]).strip() == "":
+                return jsonify({"error": f"Missing field: {field}"}), 400
+
+        repeat_type = data["repeat_type"]    
+        repeat_value = int(data.get("repeat_value", 0)) 
+
+        start_date = datetime.strptime(data["slfcmp_start_date"], "%Y-%m-%d")
+        end_date = datetime.strptime(data["slfcmp_end_date"], "%Y-%m-%d")
+        action_date = datetime.strptime(data["slfcmp_action_date"], "%Y-%m-%d")
+
+        compliance_id = "com" + datetime.now().strftime("%Y%m%d%H%M%S") + uuid4().hex[:4]
 
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("""
-                    SELECT
-                        cmplst_id,
-                        cmplst_compliance_key,
-                        cmplst_act,
-                        cmplst_particular,
-                        cmplst_start_date,
-                        cmplst_end_date,
-                        cmplst_action_date,
-                        cmplst_description,
-                        cmplst_country,
-                        cmplst_user_id,
-                        cmplst_actions_completed,
-                        cmplst_month,
-                        cmplst_day,
-                        cmplst_remaining_days,
-                        cmplst_escalation_mail,
-                        cmplst_reminder_on_escalation_mail,
-                        cmplst_next_month_date,
-                        cmplst_next_day_date,
-                        cmplst_next_remaining_date,
-                        cmplst_next_escalation_date
-                    FROM compliance_list
-                    WHERE cmplst_user_id = %s
-                    ORDER BY cmplst_end_date DESC
-                """, (user_id,))
 
-        compliances = cursor.fetchall()
+        inserted = 0
+        current_action_date = action_date
+
+        if repeat_type == "months":
+            if repeat_value <= 0:
+                return jsonify({"error": "repeat_value must be > 0 for months"}), 400
+
+            while current_action_date <= end_date:
+                cursor.execute("""
+                    INSERT INTO self_compliance (
+                        slfcmp_act,
+                        slfcmp_particular,
+                        slfcmp_description,
+                        slfcmp_long_description,
+                        slfcmp_title,
+                        slfcmp_compliance_id,
+                        slfcmp_reminder_days,
+                        slfcmp_start_date,
+                        slfcmp_end_date,
+                        slfcmp_action_date,
+                        slfcmp_status,
+                        slfcmp_escalation_email,
+                        slfcmp_escalation_reminder_days,
+                        slfcmp_requested_date,
+                        slfcmp_original_action_date,
+                        slfcmp_user_id,
+                        slfcmp_user_group_id,
+                        slfcmp_compliance_key
+                    )
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                """, (
+                    data["slfcmp_act"],
+                    data["slfcmp_particular"],
+                    data["slfcmp_description"],
+                    data["slfcmp_long_description"],
+                    data["slfcmp_title"],
+                    compliance_id,
+                    data["slfcmp_reminder_days"],
+                    data["slfcmp_start_date"],
+                    data["slfcmp_end_date"],
+                    current_action_date.strftime("%Y-%m-%d"),
+                    "Pending",
+                    data["slfcmp_escalation_email"],
+                    data["slfcmp_escalation_reminder_days"],
+                    datetime.now().strftime("%Y-%m-%d"),
+                    current_action_date.strftime("%Y-%m-%d"),
+                    user_id,
+                    user_group_id,
+                    1
+                ))
+                inserted += 1
+                current_action_date += relativedelta(months=repeat_value)
+
+        elif repeat_type == "days":
+            if repeat_value <= 0:
+                return jsonify({"error": "repeat_value must be > 0 for days"}), 400
+
+            while current_action_date <= end_date:
+                cursor.execute(""" INSERT INTO self_compliance (...) VALUES (...) """, (
+                    data["slfcmp_act"],
+                    data["slfcmp_particular"],
+                    data["slfcmp_description"],
+                    data["slfcmp_long_description"],
+                    data["slfcmp_title"],
+                    compliance_id,
+                    data["slfcmp_reminder_days"],
+                    data["slfcmp_start_date"],
+                    data["slfcmp_end_date"],
+                    current_action_date.strftime("%Y-%m-%d"),
+                    "Pending",
+                    data["slfcmp_escalation_email"],
+                    data["slfcmp_escalation_reminder_days"],
+                    datetime.now().strftime("%Y-%m-%d"),
+                    current_action_date.strftime("%Y-%m-%d"),
+                    user_id,
+                    user_group_id,
+                    1
+                ))
+                inserted += 1
+                current_action_date += timedelta(days=repeat_value)
+
+        else:
+            cursor.execute(""" INSERT INTO self_compliance (...) VALUES (...) """, (
+                data["slfcmp_act"],
+                data["slfcmp_particular"],
+                data["slfcmp_description"],
+                data["slfcmp_long_description"],
+                data["slfcmp_title"],
+                compliance_id,
+                data["slfcmp_reminder_days"],
+                data["slfcmp_start_date"],
+                data["slfcmp_end_date"],
+                data["slfcmp_action_date"],
+                "Pending",
+                data["slfcmp_escalation_email"],
+                data["slfcmp_escalation_reminder_days"],
+                datetime.now().strftime("%Y-%m-%d"),
+                data["slfcmp_action_date"],
+                user_id,
+                user_group_id,
+                1
+            ))
+            inserted = 1
+
+        conn.commit()
         cursor.close()
         conn.close()
-        return jsonify({"compliances": compliances}), 200
+
+        return jsonify({
+            "message": "Custom compliance added successfully",
+            "compliance_id": compliance_id,
+            "instances_created": inserted
+        }), 201
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
