@@ -39,18 +39,18 @@ def dashboard_summary():
         cursor.execute("""
         SELECT 
         (
-            SELECT COUNT(*) 
-            FROM regulatory_compliance 
+            SELECT COUNT(DISTINCT regcmp_compliance_id)
+            FROM regulatory_compliance
             WHERE regcmp_user_id = %s
         ) +
         (
-            SELECT COUNT(*) 
-            FROM self_compliance 
-            WHERE slfcmp_user_id = %s
+        SELECT COUNT(DISTINCT slfcmp_compliance_id)
+        FROM self_compliance
+        WHERE slfcmp_user_id = %s
         ) AS total_compliances
         """, (user_id, user_id))
-        total_compliances = cursor.fetchone()["total_compliances"]
 
+        total_compliances = cursor.fetchone()["total_compliances"]
 
         # Total departments
         # cursor.execute("""
@@ -78,6 +78,8 @@ def dashboard_summary():
         #     WHERE cmplst_user_id = %s
         # """, (user_id,))
         # total_pending_actions = cursor.fetchone()["total_pending_actions"]
+
+
 
         # Subscription end date
         cursor.execute("""

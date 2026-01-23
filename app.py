@@ -11,8 +11,6 @@ from routes.business_unit import business_unit_bp
 from routes.compliance import compliance_bp
 from routes.dashboard import dashboard_bp
 from routes.activity_log import activity_log_bp
-from routes.selfcompli_report import report_bp
-from routes.regulcompli_report import regulcompli_report_bp
 from routes.calendar import calendar_bp
 from routes.form_submission import form_submission_bp
 from routes.assessment import assessment_bp
@@ -57,13 +55,10 @@ app.register_blueprint(dashboard_bp, url_prefix="/dashboard")
 app.register_blueprint(user_department_bp)
 app.register_blueprint(business_unit_bp)
 app.register_blueprint(activity_log_bp)
-app.register_blueprint(report_bp)
 app.register_blueprint(calendar_bp)
-app.register_blueprint(regulcompli_report_bp)
 app.register_blueprint(form_submission_bp)
 app.register_blueprint(assessment_bp)
 app.register_blueprint(logout_bp)
-
 
 if __name__ == '__main__':
     app.run(port=5001, debug=True)

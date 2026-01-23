@@ -240,6 +240,166 @@ def add_regulatory_compliance():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
+# @compliance_bp.route("/add/custom", methods=["POST"])
+# @jwt_required()
+# def add_custom_compliance():
+#     try:
+#         claims = get_jwt()
+#         user_id = claims.get("sub")
+#         user_group_id = claims.get("user_group_id")
+
+#         data = request.get_json()
+#         if not data:
+#             return jsonify({"error": "Invalid JSON body"}), 400
+
+#         required_fields = [
+#             "slfcmp_act",
+#             "slfcmp_particular",
+#             "slfcmp_description",
+#             "slfcmp_long_description",
+#             "slfcmp_title",
+#             "slfcmp_reminder_days",
+#             "slfcmp_start_date",
+#             "slfcmp_end_date",
+#             "slfcmp_action_date",
+#             "slfcmp_escalation_email",
+#             "slfcmp_escalation_reminder_days",
+#             "repeat_type"      
+#         ]
+
+#         for field in required_fields:
+#             if field not in data or str(data[field]).strip() == "":
+#                 return jsonify({"error": f"Missing field: {field}"}), 400
+
+#         repeat_type = data["repeat_type"]    
+#         repeat_value = int(data.get("repeat_value", 0)) 
+
+#         start_date = datetime.strptime(data["slfcmp_start_date"], "%Y-%m-%d")
+#         end_date = datetime.strptime(data["slfcmp_end_date"], "%Y-%m-%d")
+#         action_date = datetime.strptime(data["slfcmp_action_date"], "%Y-%m-%d")
+
+#         compliance_id = "com" + datetime.now().strftime("%Y%m%d%H%M%S") + uuid4().hex[:4]
+
+#         conn = get_db_connection()
+#         cursor = conn.cursor()
+
+#         inserted = 0
+#         current_action_date = action_date
+
+#         if repeat_type == "months":
+#             if repeat_value <= 0:
+#                 return jsonify({"error": "repeat_value must be > 0 for months"}), 400
+
+#             while current_action_date <= end_date:
+#                 cursor.execute("""
+#                     INSERT INTO self_compliance (
+#                         slfcmp_act,
+#                         slfcmp_particular,
+#                         slfcmp_description,
+#                         slfcmp_long_description,
+#                         slfcmp_title,
+#                         slfcmp_compliance_id,
+#                         slfcmp_reminder_days,
+#                         slfcmp_start_date,
+#                         slfcmp_end_date,
+#                         slfcmp_action_date,
+#                         slfcmp_status,
+#                         slfcmp_escalation_email,
+#                         slfcmp_escalation_reminder_days,
+#                         slfcmp_requested_date,
+#                         slfcmp_original_action_date,
+#                         slfcmp_user_id,
+#                         slfcmp_user_group_id,
+#                         slfcmp_compliance_key
+#                     )
+#                     VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+#                 """, (
+#                     data["slfcmp_act"],
+#                     data["slfcmp_particular"],
+#                     data["slfcmp_description"],
+#                     data["slfcmp_long_description"],
+#                     data["slfcmp_title"],
+#                     compliance_id,
+#                     data["slfcmp_reminder_days"],
+#                     data["slfcmp_start_date"],
+#                     data["slfcmp_end_date"],
+#                     current_action_date.strftime("%Y-%m-%d"),
+#                     "Pending",
+#                     data["slfcmp_escalation_email"],
+#                     data["slfcmp_escalation_reminder_days"],
+#                     datetime.now().strftime("%Y-%m-%d"),
+#                     current_action_date.strftime("%Y-%m-%d"),
+#                     user_id,
+#                     user_group_id,
+#                     1
+#                 ))
+#                 inserted += 1
+#                 current_action_date += relativedelta(months=repeat_value)
+
+#         elif repeat_type == "days":
+#             if repeat_value <= 0:
+#                 return jsonify({"error": "repeat_value must be > 0 for days"}), 400
+
+#             while current_action_date <= end_date:
+#                 cursor.execute(""" INSERT INTO self_compliance (...) VALUES (...) """, (
+#                     data["slfcmp_act"],
+#                     data["slfcmp_particular"],
+#                     data["slfcmp_description"],
+#                     data["slfcmp_long_description"],
+#                     data["slfcmp_title"],
+#                     compliance_id,
+#                     data["slfcmp_reminder_days"],
+#                     data["slfcmp_start_date"],
+#                     data["slfcmp_end_date"],
+#                     current_action_date.strftime("%Y-%m-%d"),
+#                     "Pending",
+#                     data["slfcmp_escalation_email"],
+#                     data["slfcmp_escalation_reminder_days"],
+#                     datetime.now().strftime("%Y-%m-%d"),
+#                     current_action_date.strftime("%Y-%m-%d"),
+#                     user_id,
+#                     user_group_id,
+#                     1
+#                 ))
+#                 inserted += 1
+#                 current_action_date += timedelta(days=repeat_value)
+
+#         else:
+#             cursor.execute(""" INSERT INTO self_compliance (...) VALUES (...) """, (
+#                 data["slfcmp_act"],
+#                 data["slfcmp_particular"],
+#                 data["slfcmp_description"],
+#                 data["slfcmp_long_description"],
+#                 data["slfcmp_title"],
+#                 compliance_id,
+#                 data["slfcmp_reminder_days"],
+#                 data["slfcmp_start_date"],
+#                 data["slfcmp_end_date"],
+#                 data["slfcmp_action_date"],
+#                 "Pending",
+#                 data["slfcmp_escalation_email"],
+#                 data["slfcmp_escalation_reminder_days"],
+#                 datetime.now().strftime("%Y-%m-%d"),
+#                 data["slfcmp_action_date"],
+#                 user_id,
+#                 user_group_id,
+#                 1
+#             ))
+#             inserted = 1
+
+#         conn.commit()
+#         cursor.close()
+#         conn.close()
+
+#         return jsonify({
+#             "message": "Custom compliance added successfully",
+#             "compliance_id": compliance_id,
+#             "instances_created": inserted
+#         }), 201
+
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
+
 @compliance_bp.route("/add/custom", methods=["POST"])
 @jwt_required()
 def add_custom_compliance():
@@ -264,24 +424,53 @@ def add_custom_compliance():
             "slfcmp_action_date",
             "slfcmp_escalation_email",
             "slfcmp_escalation_reminder_days",
-            "repeat_type"      
+            "repeat_type"  
         ]
 
         for field in required_fields:
             if field not in data or str(data[field]).strip() == "":
                 return jsonify({"error": f"Missing field: {field}"}), 400
 
-        repeat_type = data["repeat_type"]    
-        repeat_value = int(data.get("repeat_value", 0)) 
-
         start_date = datetime.strptime(data["slfcmp_start_date"], "%Y-%m-%d")
         end_date = datetime.strptime(data["slfcmp_end_date"], "%Y-%m-%d")
         action_date = datetime.strptime(data["slfcmp_action_date"], "%Y-%m-%d")
 
-        compliance_id = "com" + datetime.now().strftime("%Y%m%d%H%M%S") + uuid4().hex[:4]
+        if start_date > action_date or action_date > end_date:
+            return jsonify({
+                "error": "Invalid date sequence (start <= action <= end required)"
+            }), 400
+
+        repeat_type = data["repeat_type"]
+        repeat_value = int(data.get("repeat_value", 0))
+
+        compliance_id = "com" + datetime.now().strftime("%Y%m%d%H%M%S")
 
         conn = get_db_connection()
         cursor = conn.cursor()
+
+        insert_sql = """
+        INSERT INTO self_compliance (
+            slfcmp_act,
+            slfcmp_particular,
+            slfcmp_description,
+            slfcmp_long_description,
+            slfcmp_title,
+            slfcmp_compliance_id,
+            slfcmp_reminder_days,
+            slfcmp_start_date,
+            slfcmp_end_date,
+            slfcmp_action_date,
+            slfcmp_status,
+            slfcmp_escalation_email,
+            slfcmp_escalation_reminder_days,
+            slfcmp_requested_date,
+            slfcmp_original_action_date,
+            slfcmp_user_id,
+            slfcmp_user_group_id,
+            slfcmp_compliance_key
+        )
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """
 
         inserted = 0
         current_action_date = action_date
@@ -291,29 +480,7 @@ def add_custom_compliance():
                 return jsonify({"error": "repeat_value must be > 0 for months"}), 400
 
             while current_action_date <= end_date:
-                cursor.execute("""
-                    INSERT INTO self_compliance (
-                        slfcmp_act,
-                        slfcmp_particular,
-                        slfcmp_description,
-                        slfcmp_long_description,
-                        slfcmp_title,
-                        slfcmp_compliance_id,
-                        slfcmp_reminder_days,
-                        slfcmp_start_date,
-                        slfcmp_end_date,
-                        slfcmp_action_date,
-                        slfcmp_status,
-                        slfcmp_escalation_email,
-                        slfcmp_escalation_reminder_days,
-                        slfcmp_requested_date,
-                        slfcmp_original_action_date,
-                        slfcmp_user_id,
-                        slfcmp_user_group_id,
-                        slfcmp_compliance_key
-                    )
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                """, (
+                cursor.execute(insert_sql, (
                     data["slfcmp_act"],
                     data["slfcmp_particular"],
                     data["slfcmp_description"],
@@ -341,7 +508,7 @@ def add_custom_compliance():
                 return jsonify({"error": "repeat_value must be > 0 for days"}), 400
 
             while current_action_date <= end_date:
-                cursor.execute(""" INSERT INTO self_compliance (...) VALUES (...) """, (
+                cursor.execute(insert_sql, (
                     data["slfcmp_act"],
                     data["slfcmp_particular"],
                     data["slfcmp_description"],
@@ -363,9 +530,8 @@ def add_custom_compliance():
                 ))
                 inserted += 1
                 current_action_date += timedelta(days=repeat_value)
-
         else:
-            cursor.execute(""" INSERT INTO self_compliance (...) VALUES (...) """, (
+            cursor.execute(insert_sql, (
                 data["slfcmp_act"],
                 data["slfcmp_particular"],
                 data["slfcmp_description"],
