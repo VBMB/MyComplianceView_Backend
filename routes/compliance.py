@@ -7,6 +7,7 @@ from email.mime.text import MIMEText
 from uuid import uuid4
 from utils.activity_logger import log_activity
 import smtplib
+from uuid import uuid4
 
 compliance_bp = Blueprint('compliance_bp', __name__, url_prefix="/compliance")
 
@@ -437,6 +438,7 @@ def add_custom_compliance():
         if not data:
             return jsonify({"error": "Invalid JSON body"}), 400
 
+
         required_fields = [
             "slfcmp_act",
             "slfcmp_particular",
@@ -449,7 +451,7 @@ def add_custom_compliance():
             "slfcmp_action_date",
             "slfcmp_escalation_email",
             "slfcmp_escalation_reminder_days",
-            "repeat_type"  
+            "repeat_type"
         ]
 
         for field in required_fields:
@@ -460,15 +462,31 @@ def add_custom_compliance():
         end_date = datetime.strptime(data["slfcmp_end_date"], "%Y-%m-%d")
         action_date = datetime.strptime(data["slfcmp_action_date"], "%Y-%m-%d")
 
-        if start_date > action_date or action_date > end_date:
+        if not (start_date <= action_date <= end_date):
             return jsonify({
                 "error": "Invalid date sequence (start <= action <= end required)"
             }), 400
 
-        repeat_type = data["repeat_type"]
+        repeat_type = data["repeat_type"].lower().strip()
         repeat_value = int(data.get("repeat_value", 0))
 
-        compliance_id = "com" + datetime.now().strftime("%Y%m%d%H%M%S")
+        if repeat_type in ("month", "months", "monthly"):
+            repeat_mode = "months"
+        elif repeat_type in ("day", "days", "daily"):
+            repeat_mode = "days"
+        else:
+            repeat_mode = "none"
+
+        if repeat_mode in ("months", "days") and repeat_value <= 0:
+            return jsonify({
+                "error": "repeat_value must be provided and > 0"
+            }), 400
+
+        compliance_id = (
+            "com" +
+            datetime.now().strftime("%Y%m%d%H%M%S") +
+            uuid4().hex[:4]
+        )
 
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -500,10 +518,7 @@ def add_custom_compliance():
         inserted = 0
         current_action_date = action_date
 
-        if repeat_type == "months":
-            if repeat_value <= 0:
-                return jsonify({"error": "repeat_value must be > 0 for months"}), 400
-
+        if repeat_mode == "months":
             while current_action_date <= end_date:
                 cursor.execute(insert_sql, (
                     data["slfcmp_act"],
@@ -523,15 +538,12 @@ def add_custom_compliance():
                     current_action_date.strftime("%Y-%m-%d"),
                     user_id,
                     user_group_id,
-                    1
+                    compliance_id
                 ))
                 inserted += 1
                 current_action_date += relativedelta(months=repeat_value)
 
-        elif repeat_type == "days":
-            if repeat_value <= 0:
-                return jsonify({"error": "repeat_value must be > 0 for days"}), 400
-
+        elif repeat_mode == "days":
             while current_action_date <= end_date:
                 cursor.execute(insert_sql, (
                     data["slfcmp_act"],
@@ -551,10 +563,11 @@ def add_custom_compliance():
                     current_action_date.strftime("%Y-%m-%d"),
                     user_id,
                     user_group_id,
-                    1
+                    compliance_id
                 ))
                 inserted += 1
                 current_action_date += timedelta(days=repeat_value)
+
         else:
             cursor.execute(insert_sql, (
                 data["slfcmp_act"],
@@ -574,21 +587,13 @@ def add_custom_compliance():
                 data["slfcmp_action_date"],
                 user_id,
                 user_group_id,
-                1
+                compliance_id
             ))
             inserted = 1
 
         conn.commit()
         cursor.close()
         conn.close()
-
-        log_activity(
-            user_id=user_id,
-            user_group_id=user_group_id,
-            department="Compliance",
-            email=claims.get("email"),
-            action=f"Custom Compliance Added | Act: {data['slfcmp_act']} | Instances: {inserted}"
-        )
 
         return jsonify({
             "message": "Custom compliance added successfully",
@@ -598,7 +603,6 @@ def add_custom_compliance():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 # fetch regulatory
 @compliance_bp.route("/fetch/regulatory", methods=["GET"])
@@ -690,6 +694,39 @@ def fetch_custom_compliance():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+      
+@compliance_bp.route("/fetch/custom/<string:compliance_id>", methods=["GET"])
+@jwt_required()
+def fetch_custom_compliance_instances(compliance_id):
+    try:
+        user_id = get_jwt().get("sub")
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT *
+            FROM self_compliance
+            WHERE slfcmp_user_id = %s
+              AND slfcmp_compliance_id = %s
+            ORDER BY slfcmp_action_date
+        """, (user_id, compliance_id))
+
+        records = cursor.fetchall()
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "user_id": user_id,
+            "compliance_id": compliance_id,
+            "count": len(records),
+            "data": records
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
     
 @compliance_bp.route("/fetch/regulatory/<int:compliance_id>", methods=["GET"])
 @jwt_required()
@@ -820,6 +857,151 @@ def get_regulatory_compliance_for_edit(regcmp_id):
 #     except Exception as e:
 #         return jsonify({"error": str(e)}), 500
 
+@compliance_bp.route("/edit/custom/<int:slfcmp_id>", methods=["GET"])
+@jwt_required()
+def get_custom_compliance_for_edit(slfcmp_id):
+    try:
+        user_id = get_jwt().get("sub")
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT *
+            FROM self_compliance
+            WHERE slfcmp_id = %s
+              AND slfcmp_user_id = %s
+            LIMIT 1
+        """, (slfcmp_id, user_id))
+
+        record = cursor.fetchone()
+
+        cursor.close()
+        conn.close()
+
+        if not record:
+            return jsonify({
+                "error": "Compliance not found or unauthorized"
+            }), 404
+
+        return jsonify({
+            "data": record
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+@compliance_bp.route("/edit/custom/<int:slfcmp_id>", methods=["PUT"])
+@jwt_required()
+def edit_custom_compliance(slfcmp_id):
+    try:
+        claims = get_jwt()
+        user_id = claims.get("sub")
+        user_group_id = claims.get("user_group_id")
+
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        allowed_fields = {
+            "slfcmp_action_date",
+            "slfcmp_reminder_days",
+            "slfcmp_escalation_email",
+            "slfcmp_escalation_reminder_days"
+        }
+
+        updates = {}
+        values = []
+
+        for field in allowed_fields:
+            if field in data:
+                value = data[field]
+
+                if field == "slfcmp_action_date":
+                    try:
+                        datetime.strptime(value, "%Y-%m-%d")
+                    except ValueError:
+                        return jsonify({
+                            "error": "Invalid date format. Use YYYY-MM-DD"
+                        }), 400
+
+                if field in (
+                    "slfcmp_reminder_days",
+                    "slfcmp_escalation_reminder_days"
+                ):
+                    if not str(value).isdigit() or int(value) < 0:
+                        return jsonify({
+                            "error": f"{field} must be a non-negative integer"
+                        }), 400
+
+                updates[field] = value
+
+        if not updates:
+            return jsonify({
+                "error": "No valid fields to update"
+            }), 400
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT slfcmp_status
+            FROM self_compliance
+            WHERE slfcmp_id = %s
+              AND slfcmp_user_id = %s
+        """, (slfcmp_id, user_id))
+
+        row = cursor.fetchone()
+
+        if not row:
+            cursor.close()
+            conn.close()
+            return jsonify({"error": "Compliance not found"}), 404
+
+        if row["slfcmp_status"] != "Pending":
+            cursor.close()
+            conn.close()
+            return jsonify({
+                "error": "Only Pending compliances can be edited"
+            }), 403
+
+        set_clause = ", ".join([f"{k} = %s" for k in updates.keys()])
+        values.extend(updates.values())
+        values.extend([slfcmp_id, user_id])
+
+        cursor.execute(f"""
+            UPDATE self_compliance
+            SET {set_clause}
+            WHERE slfcmp_id = %s
+              AND slfcmp_user_id = %s
+        """, tuple(values))
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        log_activity(
+            user_id=user_id,
+            user_group_id=user_group_id,
+            department="Compliance",
+            email=claims.get("email"),
+            action=(
+                f"Custom Compliance Updated | "
+                f"ID: {slfcmp_id} | "
+                f"Fields: {', '.join(updates.keys())}"
+            )
+        )
+
+        return jsonify({
+            "message": "Custom compliance updated successfully",
+            "slfcmp_id": slfcmp_id,
+            "updated_fields": updates
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+   
+
 @compliance_bp.route("/edit/regulatory/<int:regcmp_id>", methods=["PUT"])
 @jwt_required()
 def edit_regulatory_compliance(regcmp_id):
@@ -926,7 +1108,6 @@ def edit_regulatory_compliance(regcmp_id):
 
 
 # custom compliance edit
-
 @compliance_bp.route("/custom/<int:slfcmp_id>", methods=["PUT"])
 @jwt_required()
 def edit_custom_action_date(slfcmp_id):
@@ -981,4 +1162,3 @@ def edit_custom_action_date(slfcmp_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-

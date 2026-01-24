@@ -79,8 +79,6 @@ def dashboard_summary():
         # """, (user_id,))
         # total_pending_actions = cursor.fetchone()["total_pending_actions"]
 
-
-
         # Subscription end date
         cursor.execute("""
             SELECT usgrp_end_of_subscription
