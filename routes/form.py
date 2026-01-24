@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from database import get_db_connection
 from dateutil import parser
+from utils.activity_logger import log_activity
 
 form_bp = Blueprint('form', __name__)
 
@@ -44,6 +45,18 @@ def submit_form():
             VALUES (%s, %s, %s, %s, %s)
         """, (company_name, govt_document, cin, subscribers, end_of_subscription))
         conn.commit()
+
+        user_group_id = cursor.lastrowid
+
+
+        log_activity(
+            user_id=None,
+            user_group_id=user_group_id,
+            department="System",
+            email="system",
+            action=f"Company Registered ({company_name})"
+        )
+
 
     except Exception as e:
         conn.rollback()

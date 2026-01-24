@@ -24,16 +24,13 @@ def get_business_units():
 
     try:
         cursor.execute("""
-            SELECT 
-                ub.usrbu_id,
-                ub.usrbu_business_unit_name,
-                ul.usrlst_name AS user_name
-            FROM user_business_unit ub
-            LEFT JOIN user_list ul
-                ON ub.usrbu_user_id = ul.usrlst_id
-            WHERE ub.usrbu_user_group_id = %s
-            ORDER BY ub.usrbu_id DESC
-        """, (user_group_id,))
+                    SELECT 
+                        usrbu_id,
+                        usrbu_business_unit_name
+                    FROM user_business_unit
+                    WHERE usrbu_user_group_id = %s
+                    ORDER BY usrbu_id DESC
+                """, (user_group_id,))
 
         rows = cursor.fetchall()
         return jsonify(rows), 200
@@ -58,52 +55,52 @@ def add_business_unit():
     data = request.get_json() or {}
 
     business_unit_name = data.get("business_unit_name")
-    user_id = data.get("user_id")
+    #user_id = data.get("user_id")
     user_group_id = claims.get("user_group_id")
 
-    if not business_unit_name or not user_id:
-        return jsonify({"error": "Business unit name and user_id are required"}), 400
+    if not business_unit_name:
+        return jsonify({"error": "Business unit name is required"}), 400
 
     conn = get_db_connection()
     cursor = conn.cursor()
 
     try:
-        # ✅ Validate user belongs to same group
-        cursor.execute("""
-            SELECT usrlst_id
-            FROM user_list
-            WHERE usrlst_id = %s AND usrlst_user_group_id = %s
-        """, (user_id, user_group_id))
+        #  ✅ Validate user belongs to same group
+        # cursor.execute("""
+        #     SELECT usrlst_id
+        #     FROM user_list
+        #     WHERE usrlst_id = %s AND usrlst_user_group_id = %s
+        # """, (user_id, user_group_id))
+        #
+        # if not cursor.fetchone():
+        #     return jsonify({"error": "Business unit already exists"}), 400
 
-        if not cursor.fetchone():
-            return jsonify({"error": "User not found in your group"}), 400
-
-        # ✅ Prevent duplicate business unit
+        # Prevent duplicate business unit
         cursor.execute("""
-            SELECT 1
-            FROM user_business_unit
-            WHERE usrbu_user_id = %s
-              AND usrbu_business_unit_name = %s
-        """, (user_id, business_unit_name))
+                    SELECT 1
+                    FROM user_business_unit
+                    WHERE usrbu_business_unit_name = %s
+                      AND usrbu_user_group_id = %s
+                """, (business_unit_name, user_group_id))
 
         if cursor.fetchone():
             return jsonify({"error": "Business unit already exists"}), 400
 
-        # ✅ Insert
+        # Insert
         cursor.execute("""
-            INSERT INTO user_business_unit
-            (usrbu_business_unit_name, usrbu_user_id, usrbu_user_group_id)
-            VALUES (%s, %s, %s)
-        """, (business_unit_name, user_id, user_group_id))
+                    INSERT INTO user_business_unit
+                    (usrbu_business_unit_name, usrbu_user_group_id)
+                    VALUES (%s, %s)
+                """, (business_unit_name, user_group_id))
 
         conn.commit()
 
         log_activity(
-            user_id=admin_id,
+            user_id=claims.get("sub"),
             user_group_id=user_group_id,
             department="Admin",
             email=claims.get("email"),
-            action=f"Business Unit Added: {business_unit_name}"
+            action=f"Business Unit Added ({business_unit_name})"
         )
 
 
@@ -141,14 +138,28 @@ def edit_business_unit():
 
     try:
         # ✅ Verify ownership
-        cursor.execute("""
-            SELECT 1
-            FROM user_business_unit
-            WHERE usrbu_id = %s AND usrbu_user_group_id = %s
-        """, (usrbu_id, user_group_id))
 
-        if not cursor.fetchone():
+        cursor.execute("""
+                   SELECT usrbu_business_unit_name
+                   FROM user_business_unit
+                   WHERE usrbu_id = %s
+                     AND usrbu_user_group_id = %s
+               """, (usrbu_id, user_group_id))
+
+        # cursor.execute("""
+        #     SELECT 1
+        #     FROM user_business_unit
+        #     WHERE usrbu_id = %s AND usrbu_user_group_id = %s
+        # """, (usrbu_id, user_group_id))
+
+        # if not cursor.fetchone():
+        #     return jsonify({"error": "Business unit not found"}), 404
+
+        row = cursor.fetchone()
+        if not row:
             return jsonify({"error": "Business unit not found"}), 404
+
+        old_name = row["usrbu_business_unit_name"]
 
         cursor.execute("""
             UPDATE user_business_unit
@@ -159,11 +170,11 @@ def edit_business_unit():
         conn.commit()
 
         log_activity(
-            user_id=admin_id,
+            user_id=claims.get("sub"),
             user_group_id=user_group_id,
             department="Admin",
             email=claims.get("email"),
-            action=f"Business Unit Updated: {old_name} → {new_name}"
+            action=f"Business Unit Updated ({old_name} → {new_name})"
         )
 
         return jsonify({"message": "Business unit updated successfully"}), 200

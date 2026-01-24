@@ -18,8 +18,12 @@ def add_event():
 
         claims = get_jwt()
         user_id = claims.get("sub")  # identity is stored as "sub"
-        if not user_id:
-            return jsonify({"error": "Unauthorized"}), 401
+        user_group_id = claims.get("user_group_id")
+        email = claims.get("email")
+        department = claims.get("usrdept_department_name") or "N/A"
+
+        # if not user_id:
+        #     return jsonify({"error": "Unauthorized"}), 401
 
         cal_date = data.get("date")
         cal_event = data.get("event")
@@ -57,9 +61,13 @@ def add_event():
 @jwt_required()
 def list_events():
     try:
-        user_id = get_jwt().get("sub")
-        if not user_id:
-            return jsonify({"error": "Unauthorized"}), 401
+
+        claims = get_jwt()
+        user_id = claims.get("sub")
+
+        # user_id = get_jwt().get("sub")
+        # if not user_id:
+        #     return jsonify({"error": "Unauthorized"}), 401
 
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -90,9 +98,15 @@ def edit_event(cal_id):
         if not data:
             return jsonify({"error": "Invalid JSON body"}), 400
 
-        user_id = get_jwt().get("sub")
-        if not user_id:
-            return jsonify({"error": "Unauthorized"}), 401
+        claims = get_jwt()
+        user_id = claims.get("sub")
+        user_group_id = claims.get("user_group_id")
+        email = claims.get("email")
+        department = claims.get("department_id") or "N/A"
+
+        # user_id = get_jwt().get("sub")
+        # if not user_id:
+        #     return jsonify({"error": "Unauthorized"}), 401
 
         cal_date = data.get("date")
         cal_event = data.get("event")
@@ -144,12 +158,22 @@ def edit_event(cal_id):
 @jwt_required()
 def delete_event(cal_id):
     try:
-        user_id = get_jwt().get("sub")
-        if not user_id:
-            return jsonify({"error": "Unauthorized"}), 401
+
+        claims = get_jwt()
+        user_id = claims.get("sub")
+        user_group_id = claims.get("user_group_id")
+        email = claims.get("email")
+        department = claims.get("department_id") or "N/A"
+
+
+        # user_id = get_jwt().get("sub")
+        # if not user_id:
+        #     return jsonify({"error": "Unauthorized"}), 401
 
         conn = get_db_connection()
         cursor = conn.cursor()
+
+
         cursor.execute("""
             DELETE FROM compliance_calendar
             WHERE cal_user_id = %s AND cal_id = %s

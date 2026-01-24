@@ -24,43 +24,66 @@ def add_department():
     data = request.get_json() or {}
 
     business_unit_id = data.get("business_unit_id")
-    user_id = data.get("user_id")
+    #user_id = data.get("user_id")
     department_name = data.get("department_name")
     user_group_id = claims.get("user_group_id")
+    admin_id = claims.get("sub")
+    admin_email = claims.get("email")
 
-    if not all([business_unit_id, user_id, department_name]):
-        return jsonify({"error": "All fields are required"}), 400
+    # if not all([business_unit_id, user_id, department_name]):
+    #     return jsonify({"error": "All fields are required"}), 400
+
+    if not all([business_unit_id, department_name]):
+        return jsonify({"error": "business_unit_id and department_name are required"}), 400
 
     conn = get_db_connection()
     cursor = conn.cursor()
 
     try:
 
-        cursor.execute(
-            "SELECT usrbu_id FROM user_business_unit WHERE usrbu_id=%s",
-            (business_unit_id,)
-        )
+        # cursor.execute(
+        #     "SELECT usrbu_id FROM user_business_unit WHERE usrbu_id=%s",
+        #     (business_unit_id,)
+        # )
+
+        cursor.execute("""
+                    SELECT usrbu_id
+                    FROM user_business_unit
+                    WHERE usrbu_id = %s AND usrbu_user_group_id = %s
+                """, (business_unit_id, user_group_id))
+
         if not cursor.fetchone():
             return jsonify({"error": "Business unit does not exist"}), 400
 
-        # ✅ Validate user belongs to same group
-        cursor.execute(
-            "SELECT usrlst_id FROM user_list WHERE usrlst_id=%s AND usrlst_user_group_id=%s",
-            (user_id, user_group_id)
-        )
-        if not cursor.fetchone():
-            return jsonify({"error": "User not found in your group"}), 400
+        #duplicate
+        cursor.execute("""
+                    SELECT 1
+                    FROM user_departments
+                    WHERE usrdept_business_unit_id = %s
+                      AND usrdept_department_name = %s
+                      AND usrdept_user_group_id = %s
+                """, (business_unit_id, department_name, user_group_id))
+
+        if cursor.fetchone():
+            return jsonify({"error": "Department already exists"}), 400
+
+        # # ✅ Validate user belongs to same group
+        # cursor.execute(
+        #     "SELECT usrlst_id FROM user_list WHERE usrlst_id=%s AND usrlst_user_group_id=%s",
+        #     (user_id, user_group_id)
+        # )
+        # if not cursor.fetchone():
+        #     return jsonify({"error": "User not found in your group"}), 400
 
         # ✅ Insert department
         cursor.execute("""
-            INSERT INTO user_departments (
-                usrdept_business_unit_id,
-                usrdept_user_id,
-                usrdept_user_group_id,
-                usrdept_department_name
-            )
-            VALUES (%s, %s, %s, %s)
-        """, (business_unit_id, user_id, user_group_id, department_name))
+                    INSERT INTO user_departments (
+                        usrdept_business_unit_id,
+                        usrdept_user_group_id,
+                        usrdept_department_name
+                    )
+                    VALUES (%s, %s, %s)
+                """, (business_unit_id, user_group_id, department_name))
 
         conn.commit()
 
@@ -106,16 +129,29 @@ def get_departments():
             SELECT 
                 ud.usrdept_id,
                 ud.usrdept_department_name,
-                ub.usrbu_business_unit_name,
-                ul.usrlst_name AS user_name
+                ub.usrbu_business_unit_name
             FROM user_departments ud
             JOIN user_business_unit ub
                 ON ud.usrdept_business_unit_id = ub.usrbu_id
-            JOIN user_list ul
-                ON ud.usrdept_user_id = ul.usrlst_id
             WHERE ud.usrdept_user_group_id = %s
             ORDER BY ud.usrdept_id DESC
         """, (user_group_id,))
+
+
+        # cursor.execute("""
+        #     SELECT
+        #         ud.usrdept_id,
+        #         ud.usrdept_department_name,
+        #         ub.usrbu_business_unit_name,
+        #         ul.usrlst_name AS user_name
+        #     FROM user_departments ud
+        #     JOIN user_business_unit ub
+        #         ON ud.usrdept_business_unit_id = ub.usrbu_id
+        #     JOIN user_list ul
+        #         ON ud.usrdept_user_id = ul.usrlst_id
+        #     WHERE ud.usrdept_user_group_id = %s
+        #     ORDER BY ud.usrdept_id DESC
+        # """, (user_group_id,))
 
         rows = cursor.fetchall()
 
@@ -175,7 +211,7 @@ def edit_department(department_id):
 
 
         log_activity(
-            user_id=claims.get("user_id"),
+            user_id=claims.get("sub"),
             user_group_id=user_group_id,
             department=new_department_name,
             email=claims.get("email"),
