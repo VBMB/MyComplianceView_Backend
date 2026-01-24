@@ -15,6 +15,7 @@ from routes.calender import calender_bp
 from routes.form_submission import form_submission_bp
 from routes.assessment import assessment_bp
 from routes.user_department import user_department_bp
+from routes.report import report_bp
 
 app = Flask(__name__)
 
@@ -59,6 +60,7 @@ app.register_blueprint(calender_bp)
 app.register_blueprint(form_submission_bp)
 app.register_blueprint(assessment_bp)
 app.register_blueprint(logout_bp)
+app.register_blueprint(report_bp)
 
 if __name__ == '__main__':
     app.run(port=5001, debug=True)
