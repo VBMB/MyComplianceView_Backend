@@ -114,11 +114,26 @@ def get_compliance_by_act_and_country():
         conn = get_db_connection()
         cursor = conn.cursor()
 
+        # cursor.execute("""
+        #     SELECT *
+        #     FROM compliance_list
+        #     WHERE cmplst_country = %s AND cmplst_act = %s
+        # """, (country, act))
+
         cursor.execute("""
-            SELECT *
-            FROM compliance_list
-            WHERE cmplst_country = %s AND cmplst_act = %s
-        """, (country, act))
+        SELECT cl.*
+        FROM compliance_list cl
+        INNER JOIN (
+        SELECT cmplst_particular, MIN(cmplst_id) AS min_id
+        FROM compliance_list
+        WHERE cmplst_country = %s
+        AND cmplst_act = %s
+        GROUP BY cmplst_particular
+        ) t
+        ON cl.cmplst_particular = t.cmplst_particular
+        AND cl.cmplst_id = t.min_id
+        WHERE cl.cmplst_country = %s
+        AND cl.cmplst_act = %s;""", (country, act , country, act))
 
         records = cursor.fetchall()
 
@@ -163,6 +178,7 @@ def add_regulatory_compliance():
         conn = get_db_connection()
         cursor = conn.cursor()
 
+        #order by ASC to maintain consistency
         cursor.execute("""
             SELECT *
             FROM compliance_list
