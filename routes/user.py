@@ -71,9 +71,9 @@ def add_admin():
         cursor.execute("""
             INSERT INTO user_list (
                 usrlst_user_group_id, usrlst_name, usrlst_email, usrlst_contact,
-                usrlst_role, usrlst_department, usrlst_password,
+                usrlst_role, usrlst_department_id, usrlst_password,
                 usrlst_last_updated, usrlst_login_flag,
-                usrlst_business_unit, usrlst_escalation_mail, usrlst_company_name
+                usrlst_business_unit_id, usrlst_escalation_mail, usrlst_company_name
             )
             VALUES (%s,%s,%s,%s,'admin',%s,%s,NOW(),0,%s,%s,%s)
         """, (
@@ -134,9 +134,9 @@ def add_user():
         cursor.execute("""
             INSERT INTO user_list (
                 usrlst_user_group_id, usrlst_name, usrlst_email, usrlst_contact,
-                usrlst_role, usrlst_department, usrlst_password,
+                usrlst_role, usrlst_department_id, usrlst_password,
                 usrlst_last_updated, usrlst_login_flag,
-                usrlst_business_unit, usrlst_escalation_mail, usrlst_company_name
+                usrlst_business_unit_id, usrlst_escalation_mail, usrlst_company_name
             )
             VALUES (%s,%s,%s,%s,'user',%s,%s,NOW(),0,%s,%s,%s)
         """, (
@@ -185,9 +185,16 @@ def list_users():
     conn = get_db_connection()
     cursor = conn.cursor()
 
+    # cursor.execute("""
+    #     SELECT usrlst_id, usrlst_name, usrlst_email, usrlst_contact,
+    #            usrlst_department_id, usrlst_business_unit_id, usrlst_escalation_mail
+    #     FROM user_list
+    #     WHERE usrlst_role!='admin' AND usrlst_user_group_id=%s
+    #     ORDER BY usrlst_last_updated DESC
+    # """, (claims["user_group_id"],))
+
     cursor.execute("""
-        SELECT usrlst_id, usrlst_name, usrlst_email, usrlst_contact,
-               usrlst_department, usrlst_business_unit, usrlst_escalation_mail
+        SELECT *
         FROM user_list
         WHERE usrlst_role!='admin' AND usrlst_user_group_id=%s
         ORDER BY usrlst_last_updated DESC

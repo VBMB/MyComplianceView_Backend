@@ -137,6 +137,16 @@ def get_departments():
             ORDER BY ud.usrdept_id DESC
         """, (user_group_id,))
 
+        cursor.execute("""
+            SELECT 
+                *
+            FROM user_departments ud
+            JOIN user_business_unit ub
+                ON ud.usrdept_business_unit_id = ub.usrbu_id
+            WHERE ud.usrdept_user_group_id = %s
+            ORDER BY ud.usrdept_id DESC
+        """, (user_group_id,))
+
 
         # cursor.execute("""
         #     SELECT

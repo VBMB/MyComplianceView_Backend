@@ -23,10 +23,18 @@ def get_business_units():
     cursor = conn.cursor()
 
     try:
+        # cursor.execute("""
+        #             SELECT 
+        #                 usrbu_id,
+        #                 usrbu_business_unit_name
+        #             FROM user_business_unit
+        #             WHERE usrbu_user_group_id = %s
+        #             ORDER BY usrbu_id DESC
+        #         """, (user_group_id,))
+
         cursor.execute("""
                     SELECT 
-                        usrbu_id,
-                        usrbu_business_unit_name
+                        *
                     FROM user_business_unit
                     WHERE usrbu_user_group_id = %s
                     ORDER BY usrbu_id DESC
