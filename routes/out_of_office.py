@@ -48,7 +48,7 @@ def add_out_of_office():
 
         conn.commit()
 
-
+# log activity
         log_activity(
             user_id=user_id,
             user_group_id=user["usrlst_user_group_id"],

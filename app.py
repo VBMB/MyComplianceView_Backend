@@ -23,7 +23,7 @@ from routes.out_of_office import out_of_office_bp
 
 app = Flask(__name__)
 
-# 🔐 JWT CONFIG (CORRECT)
+#  JWT CONFIG (CORRECT)
 app.config["JWT_SECRET_KEY"] = "change_this_to_a_strong_secret"
 app.config["JWT_TOKEN_LOCATION"] = ["headers"]
 app.config["JWT_HEADER_NAME"] = "Authorization"
