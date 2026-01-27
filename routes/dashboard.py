@@ -380,7 +380,7 @@ def dashboard_summary():
         return jsonify({
             "compliance_score_percent": compliance_score,
             "total_compliances": total_compliances,
-            
+
             "total_instances": total_instances,
             "regulatory_instances": regulatory_instances,
             "self_instances": self_instances,
@@ -421,37 +421,53 @@ def dashboard_admin():
 
         result = cursor.fetchone()
 
-        # cursor.close()
-        # conn.close()
-
         total = result["total_compliances"] or 0
         approved = result["approved_compliances"] or 0
-
         compliance_score = round((approved / total) * 100, 2) if total > 0 else 0
 
-
-        # top 5 recent compliance
         cursor.execute("""
-                    SELECT
-                        cmplst_id,
-                        cmplst_title,
-                        cmplst_start_date,
-                        cmplst_end_date
-                    FROM compliance_list
-                    ORDER BY cmplst_end_date DESC
-                    LIMIT 5
-                """)
+            SELECT *
+            FROM (
+                SELECT
+                    regcmp_id AS id,
+                    regcmp_act AS title,
+                    regcmp_start_date AS start_date,
+                    regcmp_end_date AS end_date,
+                    'regulatory' AS type
+                FROM regulatory_compliance
+                WHERE regcmp_user_group_id = %s
+                ORDER BY regcmp_id DESC
+                LIMIT 5
 
-        rows = cursor.fetchall()
+                UNION ALL
 
-        recent_compliances = []
-        for row in rows:
-            recent_compliances.append({
-                "Comp_id": row["cmplst_id"],
-                "Compliance": row["cmplst_title"],
-                "Start_Date": row["cmplst_start_date"] if row["cmplst_start_date"] else None,
-                "End_Date": row["cmplst_end_date"] if row["cmplst_end_date"] else None
-            })
+                SELECT
+                    slfcmp_id AS id,
+                    'Self Compliance' AS title,
+                    slfcmp_start_date AS start_date,
+                    slfcmp_end_date AS end_date,
+                    'self' AS type
+                FROM self_compliance
+                WHERE slfcmp_user_group_id = %s
+                ORDER BY slfcmp_id DESC
+                LIMIT 5
+            ) combined
+            ORDER BY id DESC
+            LIMIT 5
+        """, (user_group_id, user_group_id))
+
+        recent_rows = cursor.fetchall()
+
+        recent_compliances = [
+            {
+                "id": row["id"],
+                "title": row["title"],
+                "start_date": row["start_date"],
+                "end_date": row["end_date"],
+                "type": row["type"]
+            }
+            for row in recent_rows
+        ]
 
         cursor.close()
         conn.close()
