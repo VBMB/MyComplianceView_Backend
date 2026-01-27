@@ -1,13 +1,33 @@
 from flask import Blueprint, request, jsonify
 from database import get_db_connection
-from datetime import datetime
 from flask_jwt_extended import jwt_required, get_jwt
 from utils.activity_logger import log_activity
 
 calender_bp = Blueprint('calender_bp', __name__, url_prefix="/calender")
 
 
-# ---------------- ADD EVENT ----------------
+#email and department name
+def get_user_email_and_department(user_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT
+            u.usrlst_email,
+            d.usrdept_department_name AS department_name
+        FROM user_list u
+        JOIN user_departments d
+            ON d.usrdept_id = u.usrlst_department_id
+        WHERE u.usrlst_id = %s
+    """, (user_id,))
+
+    user = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    return user
+
+
+# add event
 @calender_bp.route('/add', methods=['POST'])
 @jwt_required()
 def add_event():
@@ -17,18 +37,17 @@ def add_event():
             return jsonify({"error": "Invalid JSON body"}), 400
 
         claims = get_jwt()
-        user_id = claims.get("sub")  # identity is stored as "sub"
+        user_id = claims.get("sub")
         user_group_id = claims.get("user_group_id")
-        email = claims.get("email")
-        department = claims.get("usrdept_department_name") or "N/A"
-
-        # if not user_id:
-        #     return jsonify({"error": "Unauthorized"}), 401
 
         cal_date = data.get("date")
         cal_event = data.get("event")
         if not cal_date or not cal_event:
             return jsonify({"error": "Date and event are required"}), 400
+
+        user = get_user_email_and_department(user_id)
+        if not user:
+            return jsonify({"error": "User department not set"}), 400
 
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -39,35 +58,30 @@ def add_event():
         """, (user_id, cal_date, cal_event))
         conn.commit()
 
+
         log_activity(
             user_id=user_id,
             user_group_id=user_group_id,
-            department=department,
-            email=email,
+            department=user["department_name"],
+            email=user["usrlst_email"],
             action=f"Calendar Event Added: {cal_event} on {cal_date}"
         )
+
+        cursor.close()
+        conn.close()
 
         return jsonify({"message": "Event added"}), 201
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
 
 
-# ---------------- LIST EVENTS ----------------
+# list the events
 @calender_bp.route('/list', methods=['GET'])
 @jwt_required()
 def list_events():
     try:
-
-        claims = get_jwt()
-        user_id = claims.get("sub")
-
-        # user_id = get_jwt().get("sub")
-        # if not user_id:
-        #     return jsonify({"error": "Unauthorized"}), 401
+        user_id = get_jwt().get("sub")
 
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -80,16 +94,16 @@ def list_events():
         """, (user_id,))
         events = cursor.fetchall()
 
+        cursor.close()
+        conn.close()
+
         return jsonify(events), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
 
 
-# ---------------- EDIT EVENT ----------------
+# edit
 @calender_bp.route('/edit/<int:cal_id>', methods=['PUT'])
 @jwt_required()
 def edit_event(cal_id):
@@ -101,20 +115,13 @@ def edit_event(cal_id):
         claims = get_jwt()
         user_id = claims.get("sub")
         user_group_id = claims.get("user_group_id")
-        email = claims.get("email")
-        department = claims.get("department_id") or "N/A"
-
-        # user_id = get_jwt().get("sub")
-        # if not user_id:
-        #     return jsonify({"error": "Unauthorized"}), 401
 
         cal_date = data.get("date")
         cal_event = data.get("event")
         if not cal_date and not cal_event:
             return jsonify({"error": "Nothing to update"}), 400
 
-        updates = []
-        values = []
+        updates, values = [], []
         if cal_date:
             updates.append("cal_date = %s")
             values.append(cal_date)
@@ -136,43 +143,36 @@ def edit_event(cal_id):
         if cursor.rowcount == 0:
             return jsonify({"error": "Event not found"}), 404
 
+        user = get_user_email_and_department(user_id)
+
         log_activity(
             user_id=user_id,
             user_group_id=user_group_id,
-            department=department,
-            email=email,
+            department=user["department_name"],
+            email=user["usrlst_email"],
             action=f"Calendar Event Updated (ID: {cal_id})"
         )
+
+        cursor.close()
+        conn.close()
 
         return jsonify({"message": "Event updated successfully"}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
 
 
-# ---------------- DELETE EVENT ----------------
+# delete event
 @calender_bp.route('/delete/<int:cal_id>', methods=['DELETE'])
 @jwt_required()
 def delete_event(cal_id):
     try:
-
         claims = get_jwt()
         user_id = claims.get("sub")
         user_group_id = claims.get("user_group_id")
-        email = claims.get("email")
-        department = claims.get("department_id") or "N/A"
-
-
-        # user_id = get_jwt().get("sub")
-        # if not user_id:
-        #     return jsonify({"error": "Unauthorized"}), 401
 
         conn = get_db_connection()
         cursor = conn.cursor()
-
 
         cursor.execute("""
             DELETE FROM compliance_calendar
@@ -183,19 +183,20 @@ def delete_event(cal_id):
         if cursor.rowcount == 0:
             return jsonify({"error": "Event not found or unauthorized"}), 404
 
+        user = get_user_email_and_department(user_id)
+
         log_activity(
             user_id=user_id,
             user_group_id=user_group_id,
-            department=department,
-            email=email,
+            department=user["department_name"],
+            email=user["usrlst_email"],
             action=f"Calendar Event Deleted (ID: {cal_id})"
         )
 
+        cursor.close()
+        conn.close()
 
         return jsonify({"message": "Event deleted successfully"}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
