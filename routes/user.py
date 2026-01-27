@@ -201,22 +201,32 @@ def list_users():
 
     cursor.execute("""
     SELECT
-        usrlst_id,
-        usrlst_user_group_id,
-        usrlst_business_unit_id,
-        usrlst_department_id,
-        usrlst_name,
-        usrlst_email,
-        usrlst_contact,
-        usrlst_login_flag,
-        usrlst_last_updated,
-        usrlst_role,
-        usrlst_escalation_mail
-    FROM user_list
-    WHERE usrlst_role != 'admin'
-      AND usrlst_user_group_id = %s
-    ORDER BY usrlst_last_updated DESC
+        ul.usrlst_id,
+        ul.usrlst_user_group_id,
+
+        ul.usrlst_business_unit_id,
+        bu.usrbu_business_unit_name     AS bu_name,
+
+        ul.usrlst_department_id,
+        ud.usrdept_department_name     AS dept_name,
+
+        ul.usrlst_name,
+        ul.usrlst_email,
+        ul.usrlst_contact,
+        ul.usrlst_login_flag,
+        ul.usrlst_last_updated,
+        ul.usrlst_role,
+        ul.usrlst_escalation_mail
+    FROM user_list ul
+    LEFT JOIN user_business_unit bu
+        ON bu.usrbu_id = ul.usrlst_business_unit_id
+    LEFT JOIN user_departments ud
+        ON ud.usrdept_id = ul.usrlst_department_id
+    WHERE ul.usrlst_role != 'admin'
+      AND ul.usrlst_user_group_id = %s
+    ORDER BY ul.usrlst_last_updated DESC
 """, (claims["user_group_id"],))
+
 
     users = cursor.fetchall()
     cursor.close()
