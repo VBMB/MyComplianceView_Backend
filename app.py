@@ -16,6 +16,9 @@ from routes.form_submission import form_submission_bp
 from routes.assessment import assessment_bp
 from routes.user_department import user_department_bp
 from routes.report import report_bp
+from routes.settings import settings_bp
+
+
 
 app = Flask(__name__)
 
@@ -61,6 +64,8 @@ app.register_blueprint(form_submission_bp)
 app.register_blueprint(assessment_bp)
 app.register_blueprint(logout_bp)
 app.register_blueprint(report_bp)
+
+app.register_blueprint(settings_bp)
 
 if __name__ == '__main__':
     app.run(port=5001, debug=True)
