@@ -8,6 +8,7 @@ from uuid import uuid4
 from utils.activity_logger import log_activity
 import smtplib
 from uuid import uuid4
+import pymysql
 
 compliance_bp = Blueprint('compliance_bp', __name__, url_prefix="/compliance")
 
@@ -799,10 +800,11 @@ def fetch_regulatory_compliance():
         user_id = get_jwt().get("sub")
 
         conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
+        # cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
 
         cursor.execute("""
-           SELECT rc.*
+        SELECT rc.*
         FROM regulatory_compliance rc
         where 
         rc.regcmp_id = (SELECT rc2.regcmp_id AS rc2id
@@ -825,51 +827,6 @@ def fetch_regulatory_compliance():
         return jsonify({"error": str(e)}), 500
 
 
-# #fetch custom
-# @compliance_bp.route("/fetch/custom", methods=["GET"])
-# @jwt_required()
-# def fetch_custom_compliance():
-#     try:
-#         user_id = get_jwt().get("sub")
-
-#         conn = get_db_connection()
-#         cursor = conn.cursor()
-
-#         # cursor.execute("""
-#         #     SELECT *
-#         #     FROM self_compliance
-#         #     WHERE slfcmp_user_id = %s
-#         #     ORDER BY slfcmp_action_date
-#         # """, (user_id,))
-
-#         cursor.execute("""
-#         SELECT sc.*
-#         FROM self_compliance sc
-#         JOIN (
-#         SELECT slfcmp_compliance_id, MIN(slfcmp_id) AS min_id
-#         FROM self_compliance
-#         WHERE slfcmp_user_id = %s
-#         GROUP BY slfcmp_compliance_id
-#         ) t
-#         ON sc.slfcmp_id = t.min_id
-#         WHERE sc.slfcmp_user_id = %s
-#         ORDER BY sc.slfcmp_action_date
-#         """, (user_id, user_id))
-
-#         records = cursor.fetchall()
-
-#         cursor.close()
-#         conn.close()
-
-#         return jsonify({
-#             "user_id": user_id,
-#             "count": len(records),
-#             "data": records
-#         }), 200
-
-#     except Exception as e:
-#         return jsonify({"error": str(e)}), 500
-
 # fetch custom
 @compliance_bp.route("/fetch/custom", methods=["GET"])
 @jwt_required()
@@ -878,29 +835,39 @@ def fetch_custom_compliance():
         user_id = get_jwt().get("sub")
 
         conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
+        # cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
+
+        # cursor.execute("""
+        #     SELECT sc.*
+        #     FROM self_compliance sc
+        #     WHERE sc.slfcmp_id = (
+        #         SELECT sc2.slfcmp_id
+        #         FROM self_compliance sc2
+        #         WHERE sc2.slfcmp_act = sc.slfcmp_act
+        #           AND sc2.slfcmp_compliance_id = sc.slfcmp_compliance_id
+        #           AND sc2.slfcmp_action_date = (
+        #                 SELECT MIN(sc3.slfcmp_action_date)
+        #                 FROM self_compliance sc3
+        #                 WHERE sc3.slfcmp_act = sc.slfcmp_act
+        #                   AND sc3.slfcmp_compliance_id = sc.slfcmp_compliance_id
+        #                   AND sc3.slfcmp_particular = sc.slfcmp_particular
+        #                   AND sc3.slfcmp_user_id = %s
+        #           )
+        #         LIMIT 1
+        #     )
+        #     AND sc.slfcmp_user_id = %s
+        #     ORDER BY sc.slfcmp_action_date
+        # """, (user_id, user_id))
 
         cursor.execute("""
-            SELECT sc.*
-            FROM self_compliance sc
-            WHERE sc.slfcmp_id = (
-                SELECT sc2.slfcmp_id
-                FROM self_compliance sc2
-                WHERE sc2.slfcmp_act = sc.slfcmp_act
-                  AND sc2.slfcmp_compliance_id = sc.slfcmp_compliance_id
-                  AND sc2.slfcmp_action_date = (
-                        SELECT MIN(sc3.slfcmp_action_date)
-                        FROM self_compliance sc3
-                        WHERE sc3.slfcmp_act = sc.slfcmp_act
-                          AND sc3.slfcmp_compliance_id = sc.slfcmp_compliance_id
-                          AND sc3.slfcmp_particular = sc.slfcmp_particular
-                          AND sc3.slfcmp_user_id = %s
-                  )
-                LIMIT 1
-            )
-            AND sc.slfcmp_user_id = %s
-            ORDER BY sc.slfcmp_action_date
-        """, (user_id, user_id))
+        SELECT sc.*
+        FROM self_compliance sc
+        where 
+        sc.slfcmp_id = (SELECT sc2.slfcmp_id AS rc2id
+        FROM self_compliance sc2 where sc2.slfcmp_act = sc.slfcmp_act and sc2.slfcmp_compliance_id = sc.slfcmp_compliance_id  and sc.slfcmp_action_date = (SELECT MIN(slfcmp_action_date) AS action_date
+        FROM self_compliance sc2 where sc2.slfcmp_act = sc.slfcmp_act and sc2.slfcmp_compliance_id = sc.slfcmp_compliance_id and sc2.slfcmp_particular = sc.slfcmp_particular and sc2.slfcmp_user_id = %s) limit 1 ) and sc.slfcmp_user_id = %s;
+                       """, (user_id, user_id))
 
         records = cursor.fetchall()
 
