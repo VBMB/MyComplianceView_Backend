@@ -802,24 +802,12 @@ def fetch_regulatory_compliance():
         cursor = conn.cursor(dictionary=True)
 
         cursor.execute("""
-            SELECT rc.*
-            FROM regulatory_compliance rc
-            WHERE rc.regcmp_id = (
-                SELECT rc2.regcmp_id
-                FROM regulatory_compliance rc2
-                WHERE rc2.regcmp_act = rc.regcmp_act
-                  AND rc2.regcmp_compliance_id = rc.regcmp_compliance_id
-                  AND rc2.regcmp_action_date = (
-                        SELECT MIN(rc3.regcmp_action_date)
-                        FROM regulatory_compliance rc3
-                        WHERE rc3.regcmp_act = rc.regcmp_act
-                          AND rc3.regcmp_compliance_id = rc.regcmp_compliance_id
-                          AND rc3.regcmp_particular = rc.regcmp_particular
-                          AND rc3.regcmp_user_id = %s
-                  )
-                LIMIT 1
-            )
-            AND rc.regcmp_user_id = %s
+           SELECT rc.*
+        FROM regulatory_compliance rc
+        where 
+        rc.regcmp_id = (SELECT rc2.regcmp_id AS rc2id
+        FROM regulatory_compliance rc2 where rc2.regcmp_act = rc.regcmp_act and rc2.regcmp_compliance_id = rc.regcmp_compliance_id  and rc.regcmp_action_date = (SELECT MIN(regcmp_action_date) AS action_date
+        FROM regulatory_compliance rc2 where rc2.regcmp_act = rc.regcmp_act and rc2.regcmp_compliance_id = rc.regcmp_compliance_id and rc2.regcmp_particular = rc.regcmp_particular and rc.regcmp_user_id = %s) limit 1 ) and rc.regcmp_user_id = %s;
         """, (user_id, user_id))
 
         records = cursor.fetchall()
