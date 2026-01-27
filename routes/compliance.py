@@ -637,9 +637,13 @@ def add_custom_compliance():
             if field not in data or str(data[field]).strip() == "":
                 return jsonify({"error": f"Missing field: {field}"}), 400
 
-        start_date = datetime.strptime(data["slfcmp_start_date"], "%Y-%m-%d")
-        end_date = datetime.strptime(data["slfcmp_end_date"], "%Y-%m-%d")
-        action_date = datetime.strptime(data["slfcmp_action_date"], "%Y-%m-%d")
+        # start_date = datetime.strptime(data["slfcmp_start_date"], "%d-%m-%y")
+        # end_date = datetime.strptime(data["slfcmp_end_date"], "%d-%m-%y")
+        # action_date = datetime.strptime(data["slfcmp_action_date"], "%d-%m-%y")
+
+        start_date = datetime.strptime(data["slfcmp_start_date"], "%d-%m-%Y")
+        end_date = datetime.strptime(data["slfcmp_end_date"], "%d-%m-%Y")
+        action_date = datetime.strptime(data["slfcmp_action_date"], "%d-%m-%Y")
 
         if not (start_date <= action_date <= end_date):
             return jsonify({
@@ -1075,10 +1079,10 @@ def edit_custom_compliance(slfcmp_id):
 
                 if field == "slfcmp_action_date":
                     try:
-                        datetime.strptime(value, "%Y-%m-%d")
+                        datetime.strptime(value, "%d-%m-%Y")
                     except ValueError:
                         return jsonify({
-                            "error": "Invalid date format. Use YYYY-MM-DD"
+                            "error": "Invalid date format. Use DD-MM-YYYY"
                         }), 400
 
                 if field in (
@@ -1186,10 +1190,10 @@ def edit_regulatory_compliance(regcmp_id):
 
                 if field == "regcmp_action_date":
                     try:
-                        datetime.strptime(value, "%Y-%m-%d")
+                        datetime.strptime(value, "%d-%m-%Y")
                     except ValueError:
                         return jsonify({
-                            "error": "Invalid date format. Use YYYY-MM-DD"
+                            "error": "Invalid date format. Use DD-MM-YYYY"
                         }), 400
 
                 if field in ("regcmp_reminder_days", "regcmp_escalation_reminder_days"):
