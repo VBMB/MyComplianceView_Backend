@@ -6,6 +6,7 @@ import bcrypt
 import smtplib
 from email.mime.text import MIMEText
 from utils.activity_logger import log_activity
+import pymysql
 
 user_bp = Blueprint("user_bp", __name__, url_prefix="/user")
 
@@ -182,47 +183,42 @@ def list_users():
         return jsonify({"error": "Admin only"}), 403
 
     conn = get_db_connection()
-    cursor = conn.cursor()
-
-    # cursor.execute("""
-    #     SELECT usrlst_id, usrlst_name, usrlst_email, usrlst_contact,
-    #            usrlst_department_id, usrlst_business_unit_id, usrlst_escalation_mail
-    #     FROM user_list
-    #     WHERE usrlst_role!='admin' AND usrlst_user_group_id=%s
-    #     ORDER BY usrlst_last_updated DESC
-    # """, (claims["user_group_id"],))
-
-    # cursor.execute("""
-    #     SELECT *
-    #     FROM user_list
-    #     WHERE usrlst_role!='admin' AND usrlst_user_group_id=%s
-    #     ORDER BY usrlst_last_updated DESC
-    # """, (claims["user_group_id"],))
+    cursor = conn.cursor(pymysql.cursors.DictCursor) 
 
     cursor.execute("""
-    SELECT
-        usrlst_id,
-        usrlst_user_group_id,
-        usrlst_business_unit_id,
-        usrlst_department_id,
-        usrlst_name,
-        usrlst_email,
-        usrlst_contact,
-        usrlst_login_flag,
-        usrlst_last_updated,
-        usrlst_role,
-        usrlst_escalation_mail
-    FROM user_list
-    WHERE usrlst_role != 'admin'
-      AND usrlst_user_group_id = %s
-    ORDER BY usrlst_last_updated DESC
-""", (claims["user_group_id"],))
+        SELECT
+            ul.usrlst_id,
+            ul.usrlst_user_group_id,
+
+            ul.usrlst_business_unit_id,
+            bu.usrbu_business_unit_name AS bu_name,
+
+            ul.usrlst_department_id,
+            ud.usrdept_department_name AS dept_name,
+
+            ul.usrlst_name,
+            ul.usrlst_email,
+            ul.usrlst_contact,
+            ul.usrlst_login_flag,
+            ul.usrlst_last_updated,
+            ul.usrlst_role,
+            ul.usrlst_escalation_mail
+        FROM user_list ul
+        LEFT JOIN user_business_unit bu
+            ON bu.usrbu_id = ul.usrlst_business_unit_id
+        LEFT JOIN user_departments ud
+            ON ud.usrdept_id = ul.usrlst_department_id
+        WHERE ul.usrlst_role != 'admin'
+          AND ul.usrlst_user_group_id = %s
+        ORDER BY ul.usrlst_last_updated DESC
+    """, (claims["user_group_id"],))
 
     users = cursor.fetchall()
     cursor.close()
     conn.close()
 
     return jsonify(users), 200
+
 
 # --------------------------------------------------
 # UPDATE USER (ADMIN ONLY)
