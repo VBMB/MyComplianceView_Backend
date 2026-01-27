@@ -17,6 +17,7 @@ from routes.assessment import assessment_bp
 from routes.user_department import user_department_bp
 from routes.report import report_bp
 from routes.settings import settings_bp
+from routes.out_of_office import out_of_office_bp
 
 
 
@@ -66,6 +67,8 @@ app.register_blueprint(logout_bp)
 app.register_blueprint(report_bp)
 
 app.register_blueprint(settings_bp)
+
+app.register_blueprint(out_of_office_bp)
 
 if __name__ == '__main__':
     app.run(port=5001, debug=True)
