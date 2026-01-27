@@ -163,9 +163,6 @@ def edit_event(cal_id):
         return jsonify({"error": str(e)}), 500
 
 
-# =====================================================
-# DELETE EVENT
-# =====================================================
 @calender_bp.route("/delete/<int:cal_id>", methods=["DELETE"])
 @jwt_required()
 def delete_event(cal_id):
