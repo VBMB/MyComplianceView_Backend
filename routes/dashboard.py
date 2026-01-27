@@ -444,7 +444,7 @@ FROM (
 
     FROM regulatory_compliance
 
-    WHERE regcmp_user_group_id = 1
+    WHERE regcmp_user_group_id = %s
  
     UNION ALL
  
@@ -462,7 +462,7 @@ FROM (
 
     FROM self_compliance
 
-    WHERE slfcmp_user_group_id = 1
+    WHERE slfcmp_user_group_id = %s
 
 ) combined
 
