@@ -1,15 +1,14 @@
 from flask import Blueprint, request, jsonify
-from database import get_db_connection
 from flask_jwt_extended import jwt_required, get_jwt
+from database import get_db_connection
 from utils.activity_logger import log_activity
+import pymysql
 
-calender_bp = Blueprint('calender_bp', __name__, url_prefix="/calender")
+calender_bp = Blueprint("calender_bp", __name__, url_prefix="/calender")
 
-
-#email and department name
 def get_user_email_and_department(user_id):
     conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(pymysql.cursors.DictCursor)
 
     cursor.execute("""
         SELECT
@@ -27,8 +26,7 @@ def get_user_email_and_department(user_id):
     return user
 
 
-# add event
-@calender_bp.route('/add', methods=['POST'])
+@calender_bp.route("/add", methods=["POST"])
 @jwt_required()
 def add_event():
     try:
@@ -42,6 +40,7 @@ def add_event():
 
         cal_date = data.get("date")
         cal_event = data.get("event")
+
         if not cal_date or not cal_event:
             return jsonify({"error": "Date and event are required"}), 400
 
@@ -58,7 +57,6 @@ def add_event():
         """, (user_id, cal_date, cal_event))
         conn.commit()
 
-
         log_activity(
             user_id=user_id,
             user_group_id=user_group_id,
@@ -70,21 +68,20 @@ def add_event():
         cursor.close()
         conn.close()
 
-        return jsonify({"message": "Event added"}), 201
+        return jsonify({"message": "Event added successfully"}), 201
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
-# list the events
-@calender_bp.route('/list', methods=['GET'])
+@calender_bp.route("/list", methods=["GET"])
 @jwt_required()
 def list_events():
     try:
         user_id = get_jwt().get("sub")
 
         conn = get_db_connection()
-        cursor = conn.cursor()
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
 
         cursor.execute("""
             SELECT cal_id, cal_date, cal_event, created_at
@@ -103,8 +100,10 @@ def list_events():
         return jsonify({"error": str(e)}), 500
 
 
-# edit
-@calender_bp.route('/edit/<int:cal_id>', methods=['PUT'])
+# =====================================================
+# EDIT EVENT
+# =====================================================
+@calender_bp.route("/edit/<int:cal_id>", methods=["PUT"])
 @jwt_required()
 def edit_event(cal_id):
     try:
@@ -116,23 +115,25 @@ def edit_event(cal_id):
         user_id = claims.get("sub")
         user_group_id = claims.get("user_group_id")
 
-        cal_date = data.get("date")
-        cal_event = data.get("event")
-        if not cal_date and not cal_event:
-            return jsonify({"error": "Nothing to update"}), 400
+        updates = []
+        values = []
 
-        updates, values = [], []
-        if cal_date:
+        if "date" in data:
             updates.append("cal_date = %s")
-            values.append(cal_date)
-        if cal_event:
+            values.append(data["date"])
+
+        if "event" in data:
             updates.append("cal_event = %s")
-            values.append(cal_event)
+            values.append(data["event"])
+
+        if not updates:
+            return jsonify({"error": "Nothing to update"}), 400
 
         values.extend([user_id, cal_id])
 
         conn = get_db_connection()
         cursor = conn.cursor()
+
         cursor.execute(f"""
             UPDATE compliance_calendar
             SET {', '.join(updates)}
@@ -162,8 +163,10 @@ def edit_event(cal_id):
         return jsonify({"error": str(e)}), 500
 
 
-# delete event
-@calender_bp.route('/delete/<int:cal_id>', methods=['DELETE'])
+# =====================================================
+# DELETE EVENT
+# =====================================================
+@calender_bp.route("/delete/<int:cal_id>", methods=["DELETE"])
 @jwt_required()
 def delete_event(cal_id):
     try:
@@ -181,7 +184,7 @@ def delete_event(cal_id):
         conn.commit()
 
         if cursor.rowcount == 0:
-            return jsonify({"error": "Event not found or unauthorized"}), 404
+            return jsonify({"error": "Event not found"}), 404
 
         user = get_user_email_and_department(user_id)
 
@@ -197,6 +200,130 @@ def delete_event(cal_id):
         conn.close()
 
         return jsonify({"message": "Event deleted successfully"}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@calender_bp.route("/calendar", methods=["GET"])
+@jwt_required()
+def user_compliance_calendar():
+    try:
+        claims = get_jwt()
+        user_group_id = claims.get("user_group_id")
+
+        conn = get_db_connection()
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
+
+        cursor.execute("""
+            SELECT
+                regcmp_compliance_id AS id,
+                regcmp_act AS act,
+                regcmp_particular AS particular,
+                regcmp_action_date AS action_date,
+                regcmp_status AS status,
+                'regulatory' AS type
+            FROM regulatory_compliance
+            WHERE regcmp_user_group_id = %s
+              AND regcmp_action_date IS NOT NULL
+        """, (user_group_id,))
+        regulatory = cursor.fetchall()
+
+        cursor.execute("""
+            SELECT
+                slfcmp_compliance_id AS id,
+                'self' AS act,
+                slfcmp_particular AS particular,
+                slfcmp_action_date AS action_date,
+                slfcmp_status AS status,
+                'self' AS type
+            FROM self_compliance
+            WHERE slfcmp_user_group_id = %s
+              AND slfcmp_action_date IS NOT NULL
+        """, (user_group_id,))
+        selfc = cursor.fetchall()
+
+        cursor.close()
+        conn.close()
+
+        events = [
+            {
+                "id": r["id"],
+                "title": f"{r['act']} : {r['particular']}",
+                "date": r["action_date"],
+                "status": r["status"],
+                "type": r["type"]
+            }
+            for r in (regulatory + selfc)
+        ]
+
+        return jsonify({
+            "group_id": user_group_id,
+            "total_events": len(events),
+            "events": events
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@calender_bp.route("/admin/calendar", methods=["GET"])
+@jwt_required()
+def admin_compliance_calendar():
+    try:
+        claims = get_jwt()
+        user_group_id = claims.get("user_group_id")
+
+        conn = get_db_connection()
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
+
+        cursor.execute("""
+            SELECT
+                regcmp_compliance_id AS id,
+                regcmp_act AS act,
+                regcmp_particular AS particular,
+                regcmp_action_date AS action_date,
+                regcmp_status AS status,
+                'regulatory' AS type
+            FROM regulatory_compliance
+            WHERE regcmp_user_group_id = %s
+              AND regcmp_action_date IS NOT NULL
+        """, (user_group_id,))
+        regulatory = cursor.fetchall()
+
+        cursor.execute("""
+            SELECT
+                slfcmp_compliance_id AS id,
+                'self' AS act,
+                slfcmp_particular AS particular,
+                slfcmp_action_date AS action_date,
+                slfcmp_status AS status,
+                'self' AS type
+            FROM self_compliance
+            WHERE slfcmp_user_group_id = %s
+              AND slfcmp_action_date IS NOT NULL
+        """, (user_group_id,))
+        selfc = cursor.fetchall()
+
+        cursor.close()
+        conn.close()
+
+        events = [
+            {
+                "id": r["id"],
+                "title": f"{r['act']} : {r['particular']}",
+                "date": r["action_date"],
+                "status": r["status"],
+                "type": r["type"]
+            }
+            for r in (regulatory + selfc)
+        ]
+
+        return jsonify({
+            "group_id": user_group_id,
+            "total_events": len(events),
+            "events": events
+        }), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
