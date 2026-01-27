@@ -17,12 +17,13 @@ from routes.assessment import assessment_bp
 from routes.user_department import user_department_bp
 from routes.report import report_bp
 from routes.settings import settings_bp
+from routes.out_of_office import out_of_office_bp
 
 
 
 app = Flask(__name__)
 
-# 🔐 JWT CONFIG (CORRECT)
+#  JWT CONFIG (CORRECT)
 app.config["JWT_SECRET_KEY"] = "change_this_to_a_strong_secret"
 app.config["JWT_TOKEN_LOCATION"] = ["headers"]
 app.config["JWT_HEADER_NAME"] = "Authorization"
@@ -66,6 +67,8 @@ app.register_blueprint(logout_bp)
 app.register_blueprint(report_bp)
 
 app.register_blueprint(settings_bp)
+
+app.register_blueprint(out_of_office_bp)
 
 if __name__ == '__main__':
     app.run(port=5001, debug=True)
