@@ -78,7 +78,7 @@ def change_password():
         """, (new_hash, user_id))
         conn.commit()
 
-
+#activity log
         log_activity(
             user_id=user_id,
             user_group_id=user_group_id,
