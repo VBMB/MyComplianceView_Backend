@@ -147,6 +147,126 @@ def get_compliance_by_act_and_country():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# @compliance_bp.route("/add/regulatory", methods=["POST"])
+# @jwt_required()
+# def add_regulatory_compliance():
+#     try:
+#         claims = get_jwt()
+#         user_id = claims.get("sub")
+#         user_group_id = claims.get("user_group_id")
+
+#         data = request.get_json()
+#         if not data:
+#             return jsonify({"error": "Invalid JSON body"}), 400
+
+#         required_fields = [
+#             "regcmp_country",
+#             "regcmp_act",
+#             "regcmp_particular",
+#             "regcmp_compliance_key",
+#             "regcmp_description",
+#             "regcmp_reminder_days",
+#             "regcmp_escalation_email",
+#             "regcmp_escalation_reminder_days"
+#         ]
+
+#         for field in required_fields:
+#             if field not in data or str(data[field]).strip() == "":
+#                 return jsonify({"error": f"Missing field: {field}"}), 400
+
+#         reminder_days = int(data["regcmp_reminder_days"])
+#         escalation_days = int(data["regcmp_escalation_reminder_days"])
+
+#         conn = get_db_connection()
+#         cursor = conn.cursor()
+
+#         #order by ASC to maintain consistency
+#         cursor.execute("""
+#             SELECT *
+#             FROM compliance_list
+#             WHERE cmplst_country = %s
+#               AND cmplst_act = %s
+#               AND cmplst_particular = %s
+#               AND cmplst_compliance_key = %s
+#         """, (
+#             data["regcmp_country"],
+#             data["regcmp_act"],
+#             data["regcmp_particular"],
+#             data["regcmp_compliance_key"]
+#         ))
+
+#         master_rows = cursor.fetchall()
+
+#         if not master_rows:
+#             cursor.close()
+#             conn.close()
+#             return jsonify({"error": "No matching compliance found"}), 404
+
+#         inserted = 0
+
+#         for row in master_rows:
+#             cursor.execute("""
+#                 INSERT INTO regulatory_compliance (
+#                     regcmp_act,
+#                     regcmp_particular,
+#                     regcmp_description,
+#                     regcmp_long_description,
+#                     regcmp_title,
+#                     regcmp_compliance_id,
+#                     regcmp_reminder_days,
+#                     regcmp_start_date,
+#                     regcmp_end_date,
+#                     regcmp_action_date,
+#                     regcmp_status,
+#                     regcmp_escalation_email,
+#                     regcmp_escalation_reminder_days,
+#                     regcmp_original_action_date,
+#                     regcmp_user_id,
+#                     regcmp_user_group_id
+#                 ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+#             """, (
+#                 row["cmplst_act"],
+#                 row["cmplst_particular"],
+#                 data["regcmp_description"],
+#                 row.get("cmplst_long_description", ""),
+#                 row.get("cmplst_title", ""),
+#                 data["regcmp_compliance_key"],
+#                 reminder_days,
+#                 row["cmplst_start_date"],
+#                 row["cmplst_end_date"],
+#                 row["cmplst_action_date"], 
+#                 "Pending",
+#                 data["regcmp_escalation_email"],
+#                 escalation_days,
+#                 row["cmplst_action_date"],
+#                 user_id,
+#                 user_group_id
+#             ))
+
+#             inserted += 1
+
+#         conn.commit()
+#         cursor.close()
+#         conn.close()
+
+#         log_activity(
+#             user_id=user_id,
+#             user_group_id=user_group_id,
+#             department="Compliance",
+#             email=claims.get("email"),
+#             action=f"Regulatory Compliance Added | Act: {data['regcmp_act']} | Country: {data['regcmp_country']}"
+#         )
+
+#         return jsonify({
+#             "message": "Regulatory compliance added successfully",
+#             "instances_created": inserted
+#         }), 201
+
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
+
+#chnage made here
+
 @compliance_bp.route("/add/regulatory", methods=["POST"])
 @jwt_required()
 def add_regulatory_compliance():
@@ -164,23 +284,20 @@ def add_regulatory_compliance():
             "regcmp_act",
             "regcmp_particular",
             "regcmp_compliance_key",
-            "regcmp_description",
-            "regcmp_reminder_days",
-            "regcmp_escalation_email",
-            "regcmp_escalation_reminder_days"
+            "regcmp_description"
         ]
 
         for field in required_fields:
             if field not in data or str(data[field]).strip() == "":
                 return jsonify({"error": f"Missing field: {field}"}), 400
 
-        reminder_days = int(data["regcmp_reminder_days"])
-        escalation_days = int(data["regcmp_escalation_reminder_days"])
+        reminder_days = int(data.get("regcmp_reminder_days", 0))
+        escalation_days = int(data.get("regcmp_escalation_reminder_days", 0))
+        escalation_email = data.get("regcmp_escalation_email")
 
         conn = get_db_connection()
-        cursor = conn.cursor()
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
 
-        #order by ASC to maintain consistency
         cursor.execute("""
             SELECT *
             FROM compliance_list
@@ -228,15 +345,15 @@ def add_regulatory_compliance():
                 row["cmplst_act"],
                 row["cmplst_particular"],
                 data["regcmp_description"],
-                row.get("cmplst_long_description", ""),
-                row.get("cmplst_title", ""),
+                row.get("cmplst_long_description"),
+                row.get("cmplst_title"),
                 data["regcmp_compliance_key"],
                 reminder_days,
                 row["cmplst_start_date"],
                 row["cmplst_end_date"],
-                row["cmplst_action_date"], 
+                row["cmplst_action_date"],
                 "Pending",
-                data["regcmp_escalation_email"],
+                escalation_email,
                 escalation_days,
                 row["cmplst_action_date"],
                 user_id,
@@ -264,6 +381,7 @@ def add_regulatory_compliance():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
     
 # @compliance_bp.route("/add/custom", methods=["POST"])
 # @jwt_required()
