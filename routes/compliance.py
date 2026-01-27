@@ -220,11 +220,10 @@ def add_regulatory_compliance():
                     regcmp_status,
                     regcmp_escalation_email,
                     regcmp_escalation_reminder_days,
-                    regcmp_requested_date,
                     regcmp_original_action_date,
                     regcmp_user_id,
                     regcmp_user_group_id
-                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             """, (
                 row["cmplst_act"],
                 row["cmplst_particular"],
@@ -239,7 +238,6 @@ def add_regulatory_compliance():
                 "Pending",
                 data["regcmp_escalation_email"],
                 escalation_days,
-                datetime.now().strftime("%Y-%m-%d"),
                 row["cmplst_action_date"],
                 user_id,
                 user_group_id
@@ -687,13 +685,12 @@ def add_custom_compliance():
             slfcmp_status,
             slfcmp_escalation_email,
             slfcmp_escalation_reminder_days,
-            slfcmp_requested_date,
             slfcmp_original_action_date,
             slfcmp_user_id,
             slfcmp_user_group_id,
             slfcmp_compliance_key
         )
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """
 
         inserted = 0
@@ -719,7 +716,6 @@ def add_custom_compliance():
                     "Pending",
                     data["slfcmp_escalation_email"],
                     data["slfcmp_escalation_reminder_days"],
-                    datetime.now().strftime("%d-%m-%Y"),
                     current_action_date.strftime("%d-%m-%Y"),
                     user_id,
                     user_group_id,
@@ -750,7 +746,6 @@ def add_custom_compliance():
                     "Pending",
                     data["slfcmp_escalation_email"],
                     data["slfcmp_escalation_reminder_days"],
-                    datetime.now().strftime("%d-%m-%Y"),
                     current_action_date.strftime("%d-%m-%Y"),
                     user_id,
                     user_group_id,
@@ -775,7 +770,6 @@ def add_custom_compliance():
                 "Pending",
                 data["slfcmp_escalation_email"],
                 data["slfcmp_escalation_reminder_days"],
-                datetime.now().strftime("%d-%m-%Y"),
                 data["slfcmp_action_date"],
                 user_id,
                 user_group_id,
