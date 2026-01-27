@@ -202,11 +202,73 @@ def delete_event(cal_id):
         return jsonify({"error": str(e)}), 500
 
 
-@calender_bp.route("/calendar", methods=["GET"])
+# @calender_bp.route("/calendar", methods=["GET"])
+# @jwt_required()
+# def user_compliance_calendar():
+#     try:
+#         claims = get_jwt()
+#         user_group_id = claims.get("user_group_id")
+
+#         conn = get_db_connection()
+#         cursor = conn.cursor(pymysql.cursors.DictCursor)
+
+#         cursor.execute("""
+#             SELECT
+#                 regcmp_compliance_id AS id,
+#                 regcmp_act AS act,
+#                 regcmp_particular AS particular,
+#                 regcmp_action_date AS action_date,
+#                 regcmp_status AS status,
+#                 'regulatory' AS type
+#             FROM regulatory_compliance
+#             WHERE regcmp_user_group_id = %s
+#               AND regcmp_action_date IS NOT NULL
+#         """, (user_group_id,))
+#         regulatory = cursor.fetchall()
+
+#         cursor.execute("""
+#             SELECT
+#                 slfcmp_compliance_id AS id,
+#                 'self' AS act,
+#                 slfcmp_particular AS particular,
+#                 slfcmp_action_date AS action_date,
+#                 slfcmp_status AS status,
+#                 'self' AS type
+#             FROM self_compliance
+#             WHERE slfcmp_user_group_id = %s
+#               AND slfcmp_action_date IS NOT NULL
+#         """, (user_group_id,))
+#         selfc = cursor.fetchall()
+
+#         cursor.close()
+#         conn.close()
+
+#         events = [
+#             {
+#                 "id": r["id"],
+#                 "title": f"{r['act']} : {r['particular']}",
+#                 "date": r["action_date"],
+#                 "status": r["status"],
+#                 "type": r["type"]
+#             }
+#             for r in (regulatory + selfc)
+#         ]
+
+#         return jsonify({
+#             "group_id": user_group_id,
+#             "total_events": len(events),
+#             "events": events
+#         }), 200
+
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
+
+@calender_bp.route("/user/calendar", methods=["GET"])
 @jwt_required()
 def user_compliance_calendar():
     try:
         claims = get_jwt()
+        user_id = claims.get("sub")
         user_group_id = claims.get("user_group_id")
 
         conn = get_db_connection()
@@ -221,9 +283,10 @@ def user_compliance_calendar():
                 regcmp_status AS status,
                 'regulatory' AS type
             FROM regulatory_compliance
-            WHERE regcmp_user_group_id = %s
+            WHERE regcmp_user_id = %s
+              AND regcmp_user_group_id = %s
               AND regcmp_action_date IS NOT NULL
-        """, (user_group_id,))
+        """, (user_id, user_group_id))
         regulatory = cursor.fetchall()
 
         cursor.execute("""
@@ -235,9 +298,10 @@ def user_compliance_calendar():
                 slfcmp_status AS status,
                 'self' AS type
             FROM self_compliance
-            WHERE slfcmp_user_group_id = %s
+            WHERE slfcmp_user_id = %s
+              AND slfcmp_user_group_id = %s
               AND slfcmp_action_date IS NOT NULL
-        """, (user_group_id,))
+        """, (user_id, user_group_id))
         selfc = cursor.fetchall()
 
         cursor.close()
@@ -245,16 +309,17 @@ def user_compliance_calendar():
 
         events = [
             {
-                "id": r["id"],
-                "title": f"{r['act']} : {r['particular']}",
-                "date": r["action_date"],
-                "status": r["status"],
-                "type": r["type"]
+                "id": e["id"],
+                "title": f"{e['act']} : {e['particular']}",
+                "date": e["action_date"],
+                "status": e["status"],
+                "type": e["type"]
             }
-            for r in (regulatory + selfc)
+            for e in (regulatory + selfc)
         ]
 
         return jsonify({
+            "user_id": user_id,
             "group_id": user_group_id,
             "total_events": len(events),
             "events": events
@@ -262,6 +327,7 @@ def user_compliance_calendar():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 
 @calender_bp.route("/admin/calendar", methods=["GET"])
