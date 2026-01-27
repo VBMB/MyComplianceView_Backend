@@ -113,7 +113,7 @@ def add_user():
         return jsonify({"error": "Admin only"}), 403
 
     data = request.get_json() or {}
-    required = ["name", "email", "contact", "department", "business_unit", "company_name"]
+    required = ["name", "email", "contact", "department_id", "business_unit_id", "user_group_id"]
 
     if not all(data.get(k) for k in required):
         return jsonify({"error": "Missing required fields"}), 400
@@ -136,14 +136,13 @@ def add_user():
                 usrlst_user_group_id, usrlst_name, usrlst_email, usrlst_contact,
                 usrlst_role, usrlst_department_id, usrlst_password,
                 usrlst_last_updated, usrlst_login_flag,
-                usrlst_business_unit_id, usrlst_escalation_mail, usrlst_company_name
+                usrlst_business_unit_id, usrlst_escalation_mail
             )
             VALUES (%s,%s,%s,%s,'user',%s,%s,NOW(),0,%s,%s,%s)
         """, (
             user_group_id, data["name"], data["email"], data["contact"],
-            data["department"], hashed_pw,
-            data["business_unit"], data.get("escalation_mail", ""),
-            data["company_name"]
+            data["department_id"], hashed_pw,
+            data["business_unit_id"], data.get("escalation_mail", "")
         ))
 
         conn.commit()
@@ -151,7 +150,7 @@ def add_user():
         log_activity(
             user_id=claims.get("sub"),
             user_group_id=user_group_id,
-            department=data["department"],
+            department=data["department_id"],
             email=data["email"],
             action=f"User Created ({data['name']})"
         )
@@ -193,12 +192,31 @@ def list_users():
     #     ORDER BY usrlst_last_updated DESC
     # """, (claims["user_group_id"],))
 
+    # cursor.execute("""
+    #     SELECT *
+    #     FROM user_list
+    #     WHERE usrlst_role!='admin' AND usrlst_user_group_id=%s
+    #     ORDER BY usrlst_last_updated DESC
+    # """, (claims["user_group_id"],))
+
     cursor.execute("""
-        SELECT *
-        FROM user_list
-        WHERE usrlst_role!='admin' AND usrlst_user_group_id=%s
-        ORDER BY usrlst_last_updated DESC
-    """, (claims["user_group_id"],))
+    SELECT
+        usrlst_id,
+        usrlst_user_group_id,
+        usrlst_business_unit_id,
+        usrlst_department_id,
+        usrlst_name,
+        usrlst_email,
+        usrlst_contact,
+        usrlst_login_flag,
+        usrlst_last_updated,
+        usrlst_role,
+        usrlst_escalation_mail
+    FROM user_list
+    WHERE usrlst_role != 'admin'
+      AND usrlst_user_group_id = %s
+    ORDER BY usrlst_last_updated DESC
+""", (claims["user_group_id"],))
 
     users = cursor.fetchall()
     cursor.close()
@@ -220,7 +238,7 @@ def update_user(user_id):
     data = request.get_json() or {}
     fields, values = [], []
 
-    for col in ["name", "contact", "department", "escalation_mail"]:
+    for col in ["name", "contact", "department_id", "escalation_mail"]:
         if data.get(col):
             fields.append(f"usrlst_{col}=%s")
             values.append(data[col])
@@ -246,7 +264,7 @@ def update_user(user_id):
     log_activity(
         user_id=claims.get("sub"),
         user_group_id=claims.get("user_group_id"),
-        department=data.get("department", "N/A"),
+        department=data.get("department_id", "N/A"),
         email=claims.get("email"),
         action=f"User Updated (ID {user_id})"
     )
@@ -257,39 +275,39 @@ def update_user(user_id):
 # DELETE USER (ADMIN ONLY)
 # --------------------------------------------------
 
-@user_bp.route("/delete", methods=["POST"])
-@jwt_required()
-def delete_user():
-    claims = get_jwt()
-    if claims.get("role") != "admin":
-        return jsonify({"error": "Admin only"}), 403
+# @user_bp.route("/delete", methods=["POST"])
+# @jwt_required()
+# def delete_user():
+#     claims = get_jwt()
+#     if claims.get("role") != "admin":
+#         return jsonify({"error": "Admin only"}), 403
 
-    email = (request.get_json() or {}).get("email")
-    if not email:
-        return jsonify({"error": "Email required"}), 400
+#     email = (request.get_json() or {}).get("email")
+#     if not email:
+#         return jsonify({"error": "Email required"}), 400
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
+#     conn = get_db_connection()
+#     cursor = conn.cursor()
 
-    cursor.execute("SELECT usrlst_id FROM user_list WHERE usrlst_email=%s", (email,))
-    user = cursor.fetchone()
-    if not user:
-        return jsonify({"error": "User not found"}), 404
+#     cursor.execute("SELECT usrlst_id FROM user_list WHERE usrlst_email=%s", (email,))
+#     user = cursor.fetchone()
+#     if not user:
+#         return jsonify({"error": "User not found"}), 404
 
-    cursor.execute("DELETE FROM regulatory_compliance WHERE regcmp_user_id=%s", (user["usrlst_id"],))
-    cursor.execute("DELETE FROM self_compliance WHERE slfcmp_user_id=%s", (user["usrlst_id"],))
-    cursor.execute("DELETE FROM user_list WHERE usrlst_id=%s", (user["usrlst_id"],))
+#     cursor.execute("DELETE FROM regulatory_compliance WHERE regcmp_user_id=%s", (user["usrlst_id"],))
+#     cursor.execute("DELETE FROM self_compliance WHERE slfcmp_user_id=%s", (user["usrlst_id"],))
+#     cursor.execute("DELETE FROM user_list WHERE usrlst_id=%s", (user["usrlst_id"],))
 
-    conn.commit()
-    cursor.close()
-    conn.close()
+#     conn.commit()
+#     cursor.close()
+#     conn.close()
 
-    log_activity(
-        user_id=claims.get("sub"),
-        user_group_id=claims.get("user_group_id"),
-        department="N/A",
-        email=email,
-        action=f"User Deleted ({email})"
-    )
+#     log_activity(
+#         user_id=claims.get("sub"),
+#         user_group_id=claims.get("user_group_id"),
+#         department="N/A",
+#         email=email,
+#         action=f"User Deleted ({email})"
+#     )
 
-    return jsonify({"message": f"User {email} deleted"}), 200
+#     return jsonify({"message": f"User {email} deleted"}), 200
