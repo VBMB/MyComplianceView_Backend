@@ -266,7 +266,6 @@ def get_compliance_by_act_and_country():
 #         return jsonify({"error": str(e)}), 500
 
 #chnage made here
-
 @compliance_bp.route("/add/regulatory", methods=["POST"])
 @jwt_required()
 def add_regulatory_compliance():
@@ -293,7 +292,7 @@ def add_regulatory_compliance():
 
         reminder_days = int(data.get("regcmp_reminder_days", 0))
         escalation_days = int(data.get("regcmp_escalation_reminder_days", 0))
-        escalation_email = data.get("regcmp_escalation_email")
+        escalation_email = data.get("regcmp_escalation_email", "")  # 🔑 FIX
 
         conn = get_db_connection()
         cursor = conn.cursor(pymysql.cursors.DictCursor)
@@ -359,7 +358,6 @@ def add_regulatory_compliance():
                 user_id,
                 user_group_id
             ))
-
             inserted += 1
 
         conn.commit()
@@ -381,6 +379,7 @@ def add_regulatory_compliance():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
     
 # @compliance_bp.route("/add/custom", methods=["POST"])
