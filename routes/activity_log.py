@@ -11,7 +11,7 @@ def get_activity_logs():
     try:
         claims = get_jwt()
         user_role = claims.get("role")
-        user_company = claims.get("company")
+        user_group_id = claims.get("user_group_id")
 
         if not user_role or user_role.lower() != "admin":
             return jsonify({"error": "Unauthorized access — admin only"}), 403
@@ -20,34 +20,50 @@ def get_activity_logs():
         cursor = conn.cursor()
 
         cursor.execute("""
-            SELECT usrlst_email
-            FROM user_list
-            WHERE usrlst_company_name = %s
-        """, (user_company,))
-        user_emails = [row['usrlst_email'] for row in cursor.fetchall()]
+                    SELECT
+                        acty_user_id,
+                        acty_user_group_id,
+                        acty_department,
+                        acty_email,
+                        acty_date,
+                        acty_time,
+                        acty_action
+                    FROM activity_log
+                    WHERE acty_user_group_id = %s
+                    ORDER BY acty_date DESC, acty_time DESC
+                """, (user_group_id,))
 
-        if not user_emails:
-            cursor.close()
-            conn.close()
-            return jsonify({"message": "No users found for this company"}), 404
+        # cursor.execute("""
+        #     SELECT usrlst_email
+        #     FROM user_list
+        #     WHERE usrlst_company_name = %s
+        # """, (user_company,))
+        # user_emails = [row['usrlst_email'] for row in cursor.fetchall()]
+        #
+        # if not user_emails:
+        #     cursor.close()
+        #     conn.close()
+        #     return jsonify({"message": "No users found for this company"}), 404
+        #
+        # format_strings = ','.join(['%s'] * len(user_emails))
+        # query = f"""
+        #     SELECT
+        #         a.acty_department,
+        #         a.acty_email,
+        #         a.acty_date,
+        #         a.acty_time,
+        #         a.acty_action,
+        #         u.usrlst_name,
+        #         u.usrlst_role,
+        #         u.usrlst_company_name
+        #     FROM activity_log a
+        #     JOIN user_list u ON a.acty_email = u.usrlst_email
+        #     WHERE a.acty_email IN ({format_strings})
+        #     ORDER BY a.acty_date DESC, a.acty_time DESC
+        # """
+        # cursor.execute(query, tuple(user_emails))
 
-        format_strings = ','.join(['%s'] * len(user_emails))
-        query = f"""
-            SELECT 
-                a.acty_department,
-                a.acty_email,
-                a.acty_date,
-                a.acty_time,
-                a.acty_action,
-                u.usrlst_name,
-                u.usrlst_role,
-                u.usrlst_company_name
-            FROM activity_log a
-            JOIN user_list u ON a.acty_email = u.usrlst_email
-            WHERE a.acty_email IN ({format_strings})
-            ORDER BY a.acty_date DESC, a.acty_time DESC
-        """
-        cursor.execute(query, tuple(user_emails))
+
         activities = cursor.fetchall()
 
         cursor.close()
@@ -58,7 +74,10 @@ def get_activity_logs():
                 if isinstance(value, (datetime, timedelta)):
                     activity[key] = str(value)
 
-        return jsonify({"activities": activities}), 200
+        return jsonify({
+            "total_records": len(activities),
+            "activities": activities
+        }), 200
 
     except Exception as e:
         import traceback
