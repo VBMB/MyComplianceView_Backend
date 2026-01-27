@@ -427,33 +427,50 @@ def dashboard_admin():
 
         cursor.execute("""
             SELECT *
-            FROM (
-                SELECT
-                    regcmp_id AS id,
-                    regcmp_act AS title,
-                    regcmp_start_date AS start_date,
-                    regcmp_end_date AS end_date,
-                    'regulatory' AS type
-                FROM regulatory_compliance
-                WHERE regcmp_user_group_id = %s
-                ORDER BY regcmp_id DESC
-                LIMIT 5
 
-                UNION ALL
+FROM (
 
-                SELECT
-                    slfcmp_id AS id,
-                    'Self Compliance' AS title,
-                    slfcmp_start_date AS start_date,
-                    slfcmp_end_date AS end_date,
-                    'self' AS type
-                FROM self_compliance
-                WHERE slfcmp_user_group_id = %s
-                ORDER BY slfcmp_id DESC
-                LIMIT 5
-            ) combined
-            ORDER BY id DESC
-            LIMIT 5
+    SELECT
+
+        regcmp_id AS id,
+
+        regcmp_act AS title,
+
+        regcmp_start_date AS start_date,
+
+        regcmp_end_date AS end_date,
+
+        'regulatory' AS type
+
+    FROM regulatory_compliance
+
+    WHERE regcmp_user_group_id = 1
+ 
+    UNION ALL
+ 
+    SELECT
+
+        slfcmp_id AS id,
+
+        slfcmp_act AS title,
+
+        slfcmp_start_date AS start_date,
+
+        slfcmp_end_date AS end_date,
+
+        'self' AS type
+
+    FROM self_compliance
+
+    WHERE slfcmp_user_group_id = 1
+
+) combined
+
+ORDER BY id DESC
+
+LIMIT 5;
+
+ 
         """, (user_group_id, user_group_id))
 
         recent_rows = cursor.fetchall()
