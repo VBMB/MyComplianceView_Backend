@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from database import get_db_connection
+import pymysql
 
 dashboard_bp = Blueprint('dashboard_bp', __name__, url_prefix="/dashboard")
 
@@ -106,3 +107,50 @@ def dashboard_summary():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
+
+@dashboard_bp.route('/admin', methods=['GET'])
+@jwt_required()
+def dashboard_admin():
+    try:
+        claims = get_jwt()
+        user_group_id = claims.get("user_group_id")
+
+        conn = get_db_connection()
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
+
+        cursor.execute("""
+            SELECT
+                COUNT(*) AS total_compliances,
+                SUM(CASE WHEN status = 'Approved' THEN 1 ELSE 0 END) AS approved_compliances
+            FROM (
+                SELECT regcmp_status AS status
+                FROM regulatory_compliance
+                WHERE regcmp_user_group_id = %s
+
+                UNION ALL
+
+                SELECT slfcmp_status AS status
+                FROM self_compliance
+                WHERE slfcmp_user_group_id = %s
+            ) AS all_compliances
+        """, (user_group_id, user_group_id))
+
+        result = cursor.fetchone()
+
+        cursor.close()
+        conn.close()
+
+        total = result["total_compliances"] or 0
+        approved = result["approved_compliances"] or 0
+
+        compliance_score = round((approved / total) * 100, 2) if total > 0 else 0
+
+        return jsonify({
+            "group_id": user_group_id,
+            "total_compliances": total,
+            "approved_compliances": approved,
+            "compliance_score_percent": compliance_score
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
