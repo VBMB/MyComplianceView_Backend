@@ -97,7 +97,8 @@ def compliance_report():
         user_group_id = claims.get("user_group_id")
 
         conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
+        # cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
 
         regulatory_sql = """
         SELECT
