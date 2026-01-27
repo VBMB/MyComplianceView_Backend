@@ -17,9 +17,23 @@ def change_password():
         data = request.get_json()
         old_password = data.get("old_password")
         new_password = data.get("new_password")
+        confirm_password = data.get("confirm_password")
 
-        if not old_password or not new_password:
-            return jsonify({"error": "Old password and new password are required"}), 400
+        if not old_password or not new_password or not confirm_password:
+            return jsonify({
+                "error": " password are required"
+            }), 400
+
+        if new_password != confirm_password:
+            return jsonify({
+                "error": "password do not match"
+            }), 400
+
+        if old_password == new_password:
+            return jsonify({
+                "error": "New password must be different from old password"
+            }), 400
+
 
         user_id = get_jwt_identity()
         claims = get_jwt()
@@ -49,8 +63,8 @@ def change_password():
         ):
             return jsonify({"error": "Old password is incorrect"}), 401
 
-        if old_password == new_password:
-            return jsonify({"error": "New password must be different"}), 400
+        # if old_password == new_password:
+        #     return jsonify({"error": "New password must be different"}), 400
 
         new_hash = bcrypt.hashpw(
             new_password.encode("utf-8"),
