@@ -954,7 +954,7 @@ def edit_custom_action_date(slfcmp_id):
 UPLOAD_FOLDER = "uploads/compliance_docs"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-@compliance_bp.route("/send-to-approver", methods=["POST"])
+@compliance_bp.route("/regulatory/send-to-approver", methods=["POST"])
 @jwt_required()
 def send_compliance_to_approver():
     try:
