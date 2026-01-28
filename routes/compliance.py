@@ -9,6 +9,10 @@ from utils.activity_logger import log_activity
 import smtplib
 from uuid import uuid4
 import pymysql
+import os
+from werkzeug.utils import secure_filename
+from flask_mail import Message
+from app import mail
 
 compliance_bp = Blueprint('compliance_bp', __name__, url_prefix="/compliance")
 
@@ -1609,6 +1613,92 @@ def edit_custom_action_date(slfcmp_id):
         return jsonify({
             "message": "Action date updated successfully",
             "slfcmp_action_date": new_action_date
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+
+
+UPLOAD_FOLDER = "uploads/compliance_docs"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+
+@compliance_bp.route("/send-to-approver", methods=["POST"])
+@jwt_required()
+def send_compliance_to_approver():
+    try:
+        user_id = get_jwt().get("sub")
+
+        approver_email = request.form.get("approver_email")
+        compliance_instance_id = request.form.get("compliance_instance_id")
+        file = request.files.get("attachment")
+
+        if not approver_email or not compliance_instance_id:
+            return jsonify({"error": "Approver email and compliance instance ID required"}), 400
+
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("""
+            SELECT *
+            FROM regulatory_compliance
+            WHERE regcmp_id = %s
+              AND regcmp_user_id = %s
+        """, (compliance_instance_id, user_id))
+
+        compliance = cursor.fetchone()
+
+        cursor.close()
+        conn.close()
+
+        if not compliance:
+            return jsonify({"error": "Compliance instance not found"}), 404
+
+        attachment_path = None
+        if file:
+            filename = secure_filename(file.filename)
+            attachment_path = os.path.join(UPLOAD_FOLDER, filename)
+            file.save(attachment_path)
+
+        email_body = f"""
+        Dear Approver,
+
+        A compliance action has been submitted for your review.
+
+        Compliance Details:
+        -------------------
+        Compliance ID      : {compliance['regcmp_compliance_id']}
+        Action             : {compliance['regcmp_action']}
+        Action Date        : {compliance['regcmp_action_date']}
+        Status             : {compliance['regcmp_status']}
+        Remarks            : {compliance['regcmp_remarks']}
+
+        Submitted By User ID: {user_id}
+
+        Please review the attached document (if any).
+
+        Regards,
+        Compliance System
+        """
+        msg = Message(
+            subject="Compliance Approval Required",
+            recipients=[approver_email],
+            body=email_body
+        )
+
+        if attachment_path:
+            with open(attachment_path, "rb") as f:
+                msg.attach(
+                    filename,
+                    file.content_type,
+                    f.read()
+                )
+
+        mail.send(msg)
+
+        return jsonify({
+            "message": "Email sent to approver successfully"
         }), 200
 
     except Exception as e:
