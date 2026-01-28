@@ -315,7 +315,8 @@ def user_compliance_calendar():
                 "status": e["status"],
                 "type": e["type"]
             }
-            for e in (regulatory + selfc)
+            # for e in (regulatory + selfc)
+            for e in (list(regulatory) + list(selfc))
         ]
 
         return jsonify({
@@ -379,7 +380,8 @@ def admin_compliance_calendar():
                 "status": r["status"],
                 "type": r["type"]
             }
-            for r in (regulatory + selfc)
+            # for r in (regulatory + selfc)
+            for r in (list(regulatory) + list(selfc))
         ]
 
         return jsonify({
