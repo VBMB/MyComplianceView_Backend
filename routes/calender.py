@@ -263,6 +263,9 @@ def delete_event(cal_id):
 #     except Exception as e:
 #         return jsonify({"error": str(e)}), 500
 
+
+#user
+
 @calender_bp.route("/user/calendar", methods=["GET"])
 @jwt_required()
 def user_compliance_calendar():
@@ -330,6 +333,7 @@ def user_compliance_calendar():
         return jsonify({"error": str(e)}), 500
 
 
+#admin
 
 @calender_bp.route("/admin/calendar", methods=["GET"])
 @jwt_required()
