@@ -12,19 +12,57 @@ import pymysql
 import os
 from werkzeug.utils import secure_filename
 from flask_mail import Message
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email import encoders
+import os
+import smtplib
 
 compliance_bp = Blueprint('compliance_bp', __name__, url_prefix="/compliance")
 
-def send_email(to_email, subject, body):
+# def send_email(to_email, subject, body):
+#     SMTP_SERVER = "mail.pseudoteam.com"
+#     SMTP_PORT = 587
+#     SENDER_EMAIL = "info@pseudoteam.com"
+#     SENDER_PASSWORD = "dppbHwdU9mKW"
+
+#     msg = MIMEText(body)
+#     msg["Subject"] = subject
+#     msg["From"] = SENDER_EMAIL
+#     msg["To"] = to_email
+
+#     with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+#         server.starttls()
+#         server.login(SENDER_EMAIL, SENDER_PASSWORD)
+#         server.sendmail(SENDER_EMAIL, to_email, msg.as_string())
+
+
+def send_email(to_email, subject, body, attachment_path=None):
     SMTP_SERVER = "mail.pseudoteam.com"
     SMTP_PORT = 587
     SENDER_EMAIL = "info@pseudoteam.com"
     SENDER_PASSWORD = "dppbHwdU9mKW"
 
-    msg = MIMEText(body)
-    msg["Subject"] = subject
+    msg = MIMEMultipart()
     msg["From"] = SENDER_EMAIL
     msg["To"] = to_email
+    msg["Subject"] = subject
+
+    msg.attach(MIMEText(body, "plain"))
+
+    if attachment_path:
+        filename = os.path.basename(attachment_path)
+        with open(attachment_path, "rb") as f:
+            part = MIMEBase("application", "octet-stream")
+            part.set_payload(f.read())
+
+        encoders.encode_base64(part)
+        part.add_header(
+            "Content-Disposition",
+            f'attachment; filename="{filename}"'
+        )
+        msg.attach(part)
 
     with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
         server.starttls()
@@ -918,7 +956,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 @compliance_bp.route("/send-to-approver", methods=["POST"])
 @jwt_required()
-def send_compliance_to_approver():  
+def send_compliance_to_approver():
     try:
         user_id = get_jwt().get("sub")
 
@@ -930,7 +968,7 @@ def send_compliance_to_approver():
             return jsonify({"error": "Approver email and compliance instance ID required"}), 400
 
         conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
 
         cursor.execute("""
             SELECT *
@@ -947,12 +985,12 @@ def send_compliance_to_approver():
             return jsonify({"error": "Compliance instance not found"}), 404
 
         attachment_path = None
-        filename = None
         if file:
             filename = secure_filename(file.filename)
             attachment_path = os.path.join(UPLOAD_FOLDER, filename)
             file.save(attachment_path)
 
+        # Update status
         cursor.execute("""
             UPDATE regulatory_compliance
             SET regcmp_status = %s
@@ -961,7 +999,6 @@ def send_compliance_to_approver():
         """, ("Requested", compliance_instance_id, user_id))
 
         conn.commit()
-
         cursor.close()
         conn.close()
 
@@ -972,36 +1009,23 @@ A compliance action has been submitted for your review.
 
 Compliance Details:
 -------------------
-Compliance ID      : {compliance['regcmp_compliance_id']}
-Action             : {compliance['regcmp_action']}
-Action Date        : {compliance['regcmp_action_date']}
-Previous Status    : {compliance['regcmp_status']}
-New Status         : Requested
-Remarks            : {compliance['regcmp_remarks']}
+Compliance ID   : {compliance['regcmp_compliance_id']}
+Action Date     : {compliance['regcmp_action_date']}
+Previous Status : {compliance['regcmp_status']}
+New Status      : Requested
 
 Submitted By User ID: {user_id}
-
-Please review the attached document (if any).
 
 Regards,
 Compliance System
         """
 
-        msg = Message(
+        send_email(
+            to_email=approver_email,
             subject="Compliance Approval Required",
-            recipients=[approver_email],
-            body=email_body
+            body=email_body,
+            attachment_path=attachment_path
         )
-
-        if attachment_path:
-            with open(attachment_path, "rb") as f:
-                msg.attach(
-                    filename,
-                    file.content_type,
-                    f.read()
-                )
-
-        # mail.send(msg)
 
         return jsonify({
             "message": "Email sent and compliance status updated to Requested"
