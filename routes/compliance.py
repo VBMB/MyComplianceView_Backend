@@ -21,23 +21,6 @@ import smtplib
 
 compliance_bp = Blueprint('compliance_bp', __name__, url_prefix="/compliance")
 
-# def send_email(to_email, subject, body):
-#     SMTP_SERVER = "mail.pseudoteam.com"
-#     SMTP_PORT = 587
-#     SENDER_EMAIL = "info@pseudoteam.com"
-#     SENDER_PASSWORD = "dppbHwdU9mKW"
-
-#     msg = MIMEText(body)
-#     msg["Subject"] = subject
-#     msg["From"] = SENDER_EMAIL
-#     msg["To"] = to_email
-
-#     with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-#         server.starttls()
-#         server.login(SENDER_EMAIL, SENDER_PASSWORD)
-#         server.sendmail(SENDER_EMAIL, to_email, msg.as_string())
-
-
 def send_email(to_email, subject, body, attachment_path=None):
     SMTP_SERVER = "mail.pseudoteam.com"
     SMTP_PORT = 587
@@ -156,12 +139,6 @@ def get_compliance_by_act_and_country():
 
         conn = get_db_connection()
         cursor = conn.cursor()
-
-        # cursor.execute("""
-        #     SELECT *
-        #     FROM compliance_list
-        #     WHERE cmplst_country = %s AND cmplst_act = %s
-        # """, (country, act))
 
         cursor.execute("""
         SELECT cl.*

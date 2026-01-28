@@ -102,7 +102,7 @@ def compliance_report():
         regulatory_sql = """
         SELECT
             rc.regcmp_title                   AS title,
-            rc.regcmp_approvers_emails        AS approvers_email,
+            rc.regcmp_approvers_email        AS approvers_email,
             rc.regcmp_compliance_id           AS report_id,
             rc.regcmp_act                     AS act,
             rc.regcmp_particular              AS name,
@@ -202,7 +202,7 @@ def user_compliance_report():
 
         regulatory_sql = """
         SELECT
-            rc.regcmp_approvers_emails        AS approvers_email,
+            rc.regcmp_approvers_email         AS approvers_email,
             rc.regcmp_title                   AS title, 
             rc.regcmp_compliance_id           AS report_id,
             rc.regcmp_act                     AS act,
