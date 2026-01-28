@@ -1,5 +1,5 @@
 from unittest import result
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify , request
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from database import get_db_connection
 import pymysql
@@ -499,24 +499,111 @@ def dashboard_admin():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# @dashboard_bp.route("/impact_assessment", methods=["GET"])
+# @jwt_required()
+# def impact_assessment():
 
-#impact assessment
-from flask import Blueprint, jsonify, request
-from flask_jwt_extended import jwt_required, get_jwt_identity
-from database import get_db_connection
-import pymysql
+#     try:
+#         claims = get_jwt()
+#         user_group_id = claims.get("user_group_id")
+#         selected_act = request.args.get("act")
 
-dashboard_bp = Blueprint(
-    "dashboard_bp",
-    __name__,
-    url_prefix="/dashboard"
-)
+#         if not user_group_id:
+#             return jsonify({"error": "User group not found in token"}), 400
+
+#         conn = get_db_connection()
+#         cursor = conn.cursor(pymysql.cursors.DictCursor)
+
+#         query = """
+#         SELECT
+#             act,
+#             particular,
+#             COUNT(*) AS total_instances,
+
+#             SUM(CASE WHEN status = 'Approved' THEN 1 ELSE 0 END) AS approved_count,
+#             SUM(CASE WHEN status = 'Requested' THEN 1 ELSE 0 END) AS requested_count,
+#             SUM(CASE WHEN status = 'Pending' THEN 1 ELSE 0 END) AS pending_count,
+
+#             CASE
+#                 WHEN SUM(CASE WHEN status != 'Approved' THEN 1 ELSE 0 END) = 0
+#                     THEN 'Completed'
+#                 WHEN SUM(CASE WHEN status = 'Requested' THEN 1 ELSE 0 END) > 0
+#                     THEN 'In Progress'
+#                 ELSE 'Not Started'
+#             END AS particular_status
+
+#         FROM (
+#             SELECT
+#                 regcmp_act AS act,
+#                 regcmp_particular AS particular,
+#                 regcmp_status AS status
+#             FROM regulatory_compliance
+#             WHERE regcmp_user_group_id = %s
+
+#             UNION ALL
+
+#             SELECT
+#                 slfcmp_act AS act,
+#                 slfcmp_particular AS particular,
+#                 slfcmp_status AS status
+#             FROM self_compliance
+#             WHERE slfcmp_user_group_id = %s
+#         ) 
+#         """
+
+#         params = [user_group_id, user_group_id]
+
+#         if selected_act:
+#             query += " WHERE act = %s"
+#             params.append(selected_act)
+
+#         query += " GROUP BY act, particular ORDER BY act, particular"
+
+#         cursor.execute(query, params)
+#         rows = cursor.fetchall()
 
 
+#         summary = {
+#             "Completed": 0,
+#             "In Progress": 0,
+#             "Not Started": 0
+#         }
 
+#         for row in rows:
+#             summary[row["particular_status"]] += 1
+
+#         total_particulars = sum(summary.values())
+
+
+#         score_percentage = {
+#             "Completed": round((summary["Completed"] / total_particulars) * 100, 2) if total_particulars else 0,
+#             "In Progress": round((summary["In Progress"] / total_particulars) * 100, 2) if total_particulars else 0,
+#             "Not Started": round((summary["Not Started"] / total_particulars) * 100, 2) if total_particulars else 0
+#         }
+
+#         return jsonify({
+#             "selected_act": selected_act,
+#             "impact_assessment": rows,
+#             "summary": summary,
+#             "score_percentage": score_percentage
+#         }), 200
+
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
+
+#     finally:
+#         if cursor:
+#             cursor.close()
+#         if conn:
+#             conn.close()
+
+
+#fixed by sanskar
 @dashboard_bp.route("/impact_assessment", methods=["GET"])
 @jwt_required()
 def impact_assessment():
+    conn = None
+    cursor = None
 
     try:
         claims = get_jwt()
@@ -542,9 +629,9 @@ def impact_assessment():
             CASE
                 WHEN SUM(CASE WHEN status != 'Approved' THEN 1 ELSE 0 END) = 0
                     THEN 'Completed'
-                WHEN SUM(CASE WHEN status = 'Requested' THEN 1 ELSE 0 END) > 0
-                    THEN 'In Progress'
-                ELSE 'Not Started'
+                WHEN SUM(CASE WHEN status = 'Pending' THEN 1 ELSE 0 END) = COUNT(*)
+                    THEN 'Not Started'
+                ELSE 'In Progress'
             END AS particular_status
 
         FROM (
@@ -563,7 +650,7 @@ def impact_assessment():
                 slfcmp_status AS status
             FROM self_compliance
             WHERE slfcmp_user_group_id = %s
-        ) 
+        ) t
         """
 
         params = [user_group_id, user_group_id]
@@ -577,7 +664,6 @@ def impact_assessment():
         cursor.execute(query, params)
         rows = cursor.fetchall()
 
-
         summary = {
             "Completed": 0,
             "In Progress": 0,
@@ -589,11 +675,9 @@ def impact_assessment():
 
         total_particulars = sum(summary.values())
 
-
         score_percentage = {
-            "Completed": round((summary["Completed"] / total_particulars) * 100, 2) if total_particulars else 0,
-            "In Progress": round((summary["In Progress"] / total_particulars) * 100, 2) if total_particulars else 0,
-            "Not Started": round((summary["Not Started"] / total_particulars) * 100, 2) if total_particulars else 0
+            k: round((v / total_particulars) * 100, 2) if total_particulars else 0
+            for k, v in summary.items()
         }
 
         return jsonify({
