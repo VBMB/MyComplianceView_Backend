@@ -409,6 +409,10 @@ def dashboard_summary():
 
         conn = get_db_connection()
         cursor = conn.cursor(pymysql.cursors.DictCursor)
+
+        # --------------------------------------------------
+        # TOTAL UNIQUE COMPLIANCES
+        # --------------------------------------------------
         cursor.execute("""
             SELECT 
             (
@@ -427,6 +431,9 @@ def dashboard_summary():
 
         total_compliances = cursor.fetchone()["total_compliances"] or 0
 
+        # --------------------------------------------------
+        # TOTAL INSTANCES
+        # --------------------------------------------------
         cursor.execute("""
             SELECT
                 (
@@ -448,6 +455,9 @@ def dashboard_summary():
         self_instances = row["self_instances"] or 0
         total_instances = regulatory_instances + self_instances
 
+        # --------------------------------------------------
+        # TOTAL DEPARTMENTS
+        # --------------------------------------------------
         cursor.execute("""
             SELECT COUNT(*) AS total_departments
             FROM user_departments
@@ -455,6 +465,9 @@ def dashboard_summary():
         """, (user_group_id,))
         total_departments = cursor.fetchone()["total_departments"] or 0
 
+        # --------------------------------------------------
+        # SUBSCRIPTION END DATE
+        # --------------------------------------------------
         cursor.execute("""
             SELECT usgrp_end_of_subscription
             FROM user_group
@@ -468,6 +481,9 @@ def dashboard_summary():
             else None
         )
 
+        # --------------------------------------------------
+        # COMPLIANCE SCORE %
+        # --------------------------------------------------
         cursor.execute("""
             SELECT
                 COUNT(*) AS total,
@@ -490,13 +506,16 @@ def dashboard_summary():
             (score["approved"] / score["total"]) * 100, 2
         ) if score["total"] else 0
 
+        # --------------------------------------------------
+        # 🔴 AT RISK % (Pending / Requested & Overdue)
+        # --------------------------------------------------
         cursor.execute("""
             SELECT
             (
                 (
                     SELECT COUNT(*)
                     FROM regulatory_compliance
-                    WHERE STR_TO_DATE(regcmp_action_date, '%d-%m-%Y') < CURDATE()
+                    WHERE STR_TO_DATE(regcmp_action_date, '%%d-%%m-%%Y') < CURDATE()
                       AND regcmp_status IN ('Pending', 'Requested')
                       AND regcmp_user_id = %s
                       AND regcmp_user_group_id = %s
@@ -505,7 +524,7 @@ def dashboard_summary():
                 (
                     SELECT COUNT(*)
                     FROM self_compliance
-                    WHERE STR_TO_DATE(slfcmp_action_date, '%d-%m-%Y') < CURDATE()
+                    WHERE STR_TO_DATE(slfcmp_action_date, '%%d-%%m-%%Y') < CURDATE()
                       AND slfcmp_status IN ('Pending', 'Requested')
                       AND slfcmp_user_id = %s
                       AND slfcmp_user_group_id = %s
@@ -537,13 +556,16 @@ def dashboard_summary():
 
         at_risk_percent = round(cursor.fetchone()["at_risk_percent"] or 0, 2)
 
+        # --------------------------------------------------
+        # 🟢 LOW RISK % (Approved & Overdue)
+        # --------------------------------------------------
         cursor.execute("""
             SELECT
             (
                 (
                     SELECT COUNT(*)
                     FROM regulatory_compliance
-                    WHERE STR_TO_DATE(regcmp_action_date, '%d-%m-%Y') < CURDATE()
+                    WHERE STR_TO_DATE(regcmp_action_date, '%%d-%%m-%%Y') < CURDATE()
                       AND regcmp_status = 'Approved'
                       AND regcmp_user_id = %s
                       AND regcmp_user_group_id = %s
@@ -552,7 +574,7 @@ def dashboard_summary():
                 (
                     SELECT COUNT(*)
                     FROM self_compliance
-                    WHERE STR_TO_DATE(slfcmp_action_date, '%d-%m-%Y') < CURDATE()
+                    WHERE STR_TO_DATE(slfcmp_action_date, '%%d-%%m-%%Y') < CURDATE()
                       AND slfcmp_status = 'Approved'
                       AND slfcmp_user_id = %s
                       AND slfcmp_user_group_id = %s
@@ -584,13 +606,16 @@ def dashboard_summary():
 
         low_risk_percent = round(cursor.fetchone()["low_risk_percent"] or 0, 2)
 
+        # --------------------------------------------------
+        # 🔵 NO RISK % (Approved & Today / Future)
+        # --------------------------------------------------
         cursor.execute("""
             SELECT
             (
                 (
                     SELECT COUNT(*)
                     FROM regulatory_compliance
-                    WHERE STR_TO_DATE(regcmp_action_date, '%d-%m-%Y') >= CURDATE()
+                    WHERE STR_TO_DATE(regcmp_action_date, '%%d-%%m-%%Y') >= CURDATE()
                       AND regcmp_status = 'Approved'
                       AND regcmp_user_id = %s
                       AND regcmp_user_group_id = %s
@@ -599,7 +624,7 @@ def dashboard_summary():
                 (
                     SELECT COUNT(*)
                     FROM self_compliance
-                    WHERE STR_TO_DATE(slfcmp_action_date, '%d-%m-%Y') >= CURDATE()
+                    WHERE STR_TO_DATE(slfcmp_action_date, '%%d-%%m-%%Y') >= CURDATE()
                       AND slfcmp_status = 'Approved'
                       AND slfcmp_user_id = %s
                       AND slfcmp_user_group_id = %s
@@ -652,6 +677,7 @@ def dashboard_summary():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 
 @dashboard_bp.route('/admin', methods=['GET'])
