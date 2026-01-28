@@ -18,6 +18,7 @@ from routes.user_department import user_department_bp
 from routes.report import report_bp
 from routes.settings import settings_bp
 from routes.out_of_office import out_of_office_bp
+from routes.alerts import alerts_bp
 
 
 
@@ -65,6 +66,7 @@ app.register_blueprint(form_submission_bp)
 app.register_blueprint(assessment_bp)
 app.register_blueprint(logout_bp)
 app.register_blueprint(report_bp)
+app.register_blueprint(alerts_bp)
 
 app.register_blueprint(settings_bp)
 
