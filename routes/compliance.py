@@ -1010,3 +1010,89 @@ Compliance System
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+#custom
+@compliance_bp.route("/custom/send_to_approver", methods=["POST"])
+@jwt_required()
+def send_custom_compliance_to_approver():
+    try:
+        user_id = get_jwt().get("sub")
+
+        approver_email = request.form.get("approver_email")
+        compliance_instance_id = request.form.get("compliance_instance_id")
+        file = request.files.get("attachment")
+
+        if not approver_email or not compliance_instance_id:
+            return jsonify({
+                "error": "Approver email and compliance instance ID required"
+            }), 400
+
+        conn = get_db_connection()
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
+
+        cursor.execute("""
+            SELECT *
+            FROM self_compliance
+            WHERE slfcmp_id = %s
+              AND slfcmp_user_id = %s
+        """, (compliance_instance_id, user_id))
+
+        compliance = cursor.fetchone()
+
+        if not compliance:
+            cursor.close()
+            conn.close()
+            return jsonify({
+                "error": "Compliance instance not found"
+            }), 404
+
+        attachment_path = None
+        if file:
+            filename = secure_filename(file.filename)
+            attachment_path = os.path.join(UPLOAD_FOLDER, filename)
+            file.save(attachment_path)
+
+        # Update status
+        cursor.execute("""
+            UPDATE self_compliance
+            SET slfcmp_status = %s
+            WHERE slfcmp_id = %s
+              AND slfcmp_user_id = %s
+        """, ("Requested", compliance_instance_id, user_id))
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        email_body = f"""
+Dear Approver,
+
+A compliance action has been submitted for your review.
+
+Compliance Details:
+-------------------
+Compliance ID   : {compliance['slfcmp_id']}
+Action Date     : {compliance['slfcmp_action_date']}
+Previous Status : {compliance['slfcmp_status']}
+New Status      : Requested
+
+Submitted By User ID: {user_id}
+
+Regards,
+Compliance System
+        """
+
+        send_email(
+            to_email=approver_email,
+            subject="Compliance Approval Required",
+            body=email_body,
+            attachment_path=attachment_path
+        )
+
+        return jsonify({
+            "message": "Email sent and compliance status updated to Requested"
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
