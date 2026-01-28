@@ -276,7 +276,7 @@ def dashboard_summary():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-#2step (up)
+
 @dashboard_bp.route('/admin', methods=['GET'])
 @jwt_required()
 def dashboard_admin():
@@ -499,11 +499,7 @@ def dashboard_admin():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@dashboard_bp.route("/admin/act-status", methods=["GET"])
-@jwt_required()
-def act_status_summary():
-    try:
-user_id = get_jwt().get("sub")
+
 #impact assessment
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
@@ -533,86 +529,6 @@ def impact_assessment():
         conn = get_db_connection()
         cursor = conn.cursor(pymysql.cursors.DictCursor)
 
-        cursor.execute("""
-            SELECT regcmp_act AS act, regcmp_status AS status
-            FROM regulatory_compliance
-            WHERE regcmp_user_id = %s
-        """, (user_id,))
-        regulatory = cursor.fetchall() or []
-
-        cursor.execute("""
-            SELECT slfcmp_act AS act, slfcmp_status AS status
-            FROM self_compliance
-            WHERE slfcmp_user_id = %s
-        """, (user_id,))
-        self_comp = cursor.fetchall() or []
-
-        cursor.close()
-        conn.close()
-
-        all_rows = []
-        all_rows.extend(list(regulatory))
-        all_rows.extend(list(self_comp))
-
-        act_status_map = {}
-
-        for row in all_rows:
-            act = row["act"]
-            status = row["status"]
-
-            if act not in act_status_map:
-                act_status_map[act] = []
-
-            act_status_map[act].append(status)
-
-        completed = 0
-        not_started = 0
-        in_progress = 0
-
-        act_details = []
-
-        for act, statuses in act_status_map.items():
-            unique_statuses = set(statuses)
-
-            if unique_statuses == {"Approved"}:
-                final_status = "Completed"
-                completed += 1
-
-            elif unique_statuses == {"Pending"}:
-                final_status = "Not Started"
-                not_started += 1
-
-            else:
-                final_status = "In Progress"
-                in_progress += 1
-
-            act_details.append({
-                "act": act,
-                "total_instances": len(statuses),
-                "final_status": final_status
-            })
-
-        total_acts = len(act_status_map)
-
-        completed_percentage = (
-            round((completed / total_acts) * 100, 2)
-            if total_acts > 0 else 0
-        )
-
-        return jsonify({
-            "summary": {
-                "completed": completed,
-                "not_started": not_started,
-                "in_progress": in_progress,
-                "total_acts": total_acts,
-                "completed_percentage": completed_percentage
-            },
-            "act_wise_data": act_details
-        }), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-=======
         query = """
         SELECT
             act,
