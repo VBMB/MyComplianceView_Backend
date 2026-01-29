@@ -218,6 +218,31 @@ def add_regulatory_compliance():
             conn.close()
             return jsonify({"error": "No matching compliance found"}), 404
 
+        # check for duplicate
+
+        cursor.execute("""
+                    SELECT 1
+                    FROM regulatory_compliance
+                    WHERE regcmp_compliance_id = %s
+                      AND regcmp_act = %s
+                      AND regcmp_particular = %s
+                      AND regcmp_user_group_id = %s
+                    LIMIT 1
+                """, (
+            data["regcmp_compliance_key"],
+            data["regcmp_act"],
+            data["regcmp_particular"],
+            user_group_id
+        ))
+
+        if cursor.fetchone():
+            cursor.close()
+            conn.close()
+            return jsonify({
+                "error": "Regulatory compliance already exists"
+            }), 409
+
+        #insert records
         inserted = 0
 
         for row in master_rows:
@@ -1096,3 +1121,122 @@ Compliance System
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
+# delete regulatory
+@compliance_bp.route("/delete/regulatory/<int:compliance_id>", methods=["DELETE"])
+@jwt_required()
+def delete_regulatory_compliance(compliance_id):
+    try:
+        claims = get_jwt()
+        user_id = claims.get("sub")
+        user_group_id = claims.get("user_group_id")
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+
+        cursor.execute("""
+            SELECT COUNT(*) AS count
+            FROM regulatory_compliance
+            WHERE regcmp_compliance_id = %s
+              AND regcmp_user_id = %s
+        """, (compliance_id, user_id))
+
+        result = cursor.fetchone()
+
+        if result["count"] == 0:
+            cursor.close()
+            conn.close()
+            return jsonify({
+                "error": "Regulatory compliance not found"
+            }), 404
+
+
+        cursor.execute("""
+            DELETE FROM regulatory_compliance
+            WHERE regcmp_compliance_id = %s
+              AND regcmp_user_id = %s
+        """, (compliance_id, user_id))
+
+        deleted_count = cursor.rowcount
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        log_activity(
+            user_id=user_id,
+            user_group_id=user_group_id,
+            department="Compliance",
+            email=claims.get("email"),
+            action=f"Regulatory Compliance Deleted | Compliance ID: {compliance_id} | Instances: {deleted_count}"
+        )
+
+        return jsonify({
+            "message": "Regulatory compliance deleted successfully",
+            "compliance_id": compliance_id,
+            "instances_deleted": deleted_count
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+#delete custom
+@compliance_bp.route("/delete/custom/<string:compliance_id>", methods=["DELETE"])
+@jwt_required()
+def delete_custom_compliance(compliance_id):
+    try:
+        claims = get_jwt()
+        user_id = claims.get("sub")
+        user_group_id = claims.get("user_group_id")
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+
+        cursor.execute("""
+            SELECT COUNT(*) AS count
+            FROM self_compliance
+            WHERE slfcmp_compliance_id = %s
+              AND slfcmp_user_id = %s
+        """, (compliance_id, user_id))
+
+        result = cursor.fetchone()
+
+        if result["count"] == 0:
+            cursor.close()
+            conn.close()
+            return jsonify({
+                "error": "Custom compliance not found"
+            }), 404
+
+
+        cursor.execute("""
+            DELETE FROM self_compliance
+            WHERE slfcmp_compliance_id = %s
+              AND slfcmp_user_id = %s
+        """, (compliance_id, user_id))
+
+        deleted_count = cursor.rowcount
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        log_activity(
+            user_id=user_id,
+            user_group_id=user_group_id,
+            department="Compliance",
+            email=claims.get("email"),
+            action=f"Custom Compliance Deleted | Compliance ID: {compliance_id} | Instances: {deleted_count}"
+        )
+
+        return jsonify({
+            "message": "Custom compliance deleted successfully",
+            "compliance_id": compliance_id,
+            "instances_deleted": deleted_count
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
