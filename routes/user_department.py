@@ -209,6 +209,8 @@ def edit_department(department_id):
         if not old_department:
             return jsonify({"error": "Department not found"}), 404
 
+        old_name = old_department["usrdept_department_name"]
+
 
         cursor.execute("""
             UPDATE user_departments
@@ -225,7 +227,7 @@ def edit_department(department_id):
             user_group_id=user_group_id,
             department=new_department_name,
             email=claims.get("email"),
-            action=f"Department Updated ({old_department[0]} → {new_department_name})"
+            action=f"Department Updated ({old_name} → {new_department_name})"
         )
 
         return jsonify({"message": "Department name updated successfully"}), 200

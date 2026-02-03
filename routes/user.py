@@ -220,6 +220,106 @@ def list_users():
     return jsonify(users), 200
 
 
+#update user
+
+@user_bp.route("/update/<int:user_id>", methods=["PUT"])
+@jwt_required()
+def update_user(user_id):
+    claims = get_jwt()
+
+    if claims.get("role") != "admin":
+        return jsonify({"error": "Admin only"}), 403
+
+    user_group_id = claims.get("user_group_id")
+    data = request.get_json() or {}
+
+    fields = []
+    values = []
+
+    department_id = None
+    department_name = "N/A"
+
+    field_map = {
+        "name": "usrlst_name",
+        "email": "usrlst_email",
+        "contact": "usrlst_contact",
+        "business_unit_id": "usrlst_business_unit_id",
+        "department_id": "usrlst_department_id"
+    }
+
+    for key, db_col in field_map.items():
+        if key in data:
+            fields.append(f"{db_col} = %s")
+            values.append(data[key])
+
+            if key == "department_id":
+                department_id = data[key]
+
+    if not fields:
+        return jsonify({"error": "No fields to update"}), 400
+
+    fields.append("usrlst_last_updated = NOW()")
+
+    conn = get_db_connection()
+    cursor = conn.cursor(pymysql.cursors.DictCursor)
+
+    try:
+
+        cursor.execute("""
+            SELECT usrlst_id
+            FROM user_list
+            WHERE usrlst_id = %s
+              AND usrlst_user_group_id = %s
+        """, (user_id, user_group_id))
+
+        if not cursor.fetchone():
+            return jsonify({"error": "User not found"}), 404
+
+        values.extend([user_id, user_group_id])
+
+        cursor.execute(
+            f"""
+            UPDATE user_list
+            SET {', '.join(fields)}
+            WHERE usrlst_id = %s
+              AND usrlst_user_group_id = %s
+            """,
+            tuple(values)
+        )
+
+
+        if department_id:
+            cursor.execute("""
+                SELECT usrdept_department_name
+                FROM user_departments
+                WHERE usrdept_id = %s
+                  AND usrdept_user_group_id = %s
+            """, (department_id, user_group_id))
+
+            dept_row = cursor.fetchone()
+            if dept_row:
+                department_name = dept_row["usrdept_department_name"]  # ✅ FIX
+
+        conn.commit()
+
+        log_activity(
+            user_id=claims.get("sub"),
+            user_group_id=user_group_id,
+            department=department_name,
+            email=claims.get("email"),
+            action=f"User Updated (ID {user_id})"
+        )
+
+        return jsonify({"message": "User updated successfully"}), 200
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+
+    finally:
+        cursor.close()
+        conn.close()
+
 # --------------------------------------------------
 # UPDATE USER (ADMIN ONLY)
 # --------------------------------------------------
@@ -275,69 +375,71 @@ def list_users():
 #     return jsonify({"message": "User updated"}), 200
 
 #Code changes made by SS (Inserted deptartment name fetch for logging purpose)
-@user_bp.route("/update/<int:user_id>", methods=["PUT"])
-@jwt_required()
-def update_user(user_id):
-    claims = get_jwt()
-    if claims.get("role") != "admin":
-        return jsonify({"error": "Admin only"}), 403
-
-    data = request.get_json() or {}
-    fields, values = [], []
-
-    department_id = None
-    department_name = "N/A"
-
-    for col in ["name", "contact", "department_id", "escalation_mail", "login_flag"]:
-        if col in data:
-            fields.append(f"usrlst_{col}=%s")
-            values.append(data[col])
-
-            if col == "department_id":
-                department_id = data[col]
-
-    if not fields:
-        return jsonify({"error": "No fields to update"}), 400
-
-    fields.append("usrlst_last_updated=NOW()")
-    values.append(user_id)
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    cursor.execute(
-        f"""
-        UPDATE user_list
-        SET {', '.join(fields)}
-        WHERE usrlst_id=%s
-        """,
-        tuple(values)
-    )
-
-    if department_id:
-        cursor.execute("""
-            SELECT dept_name
-            FROM departments
-            WHERE dept_id = %s
-        """, (department_id,))
-
-        dept_row = cursor.fetchone()
-        if dept_row:
-            department_name = dept_row[0]
-
-    conn.commit()
-    cursor.close()
-    conn.close()
-
-    log_activity(
-        user_id=claims.get("sub"),
-        user_group_id=claims.get("user_group_id"),
-        department=department_name,
-        email=claims.get("email"),
-        action=f"User Updated (ID {user_id})"
-    )
-
-    return jsonify({"message": "User updated"}), 200
+# @user_bp.route("/update/<int:user_id>", methods=["PUT"])
+# @jwt_required()
+# def update_user(user_id):
+#     claims = get_jwt()
+#
+#     if claims.get("role") != "admin":
+#         return jsonify({"error": "Admin only"}), 403
+#
+#
+#     data = request.get_json() or {}
+#     fields, values = [], []
+#
+#     department_id = None
+#     department_name = "N/A"
+#
+#     for col in ["name", "contact", "department_id", "escalation_mail", "login_flag"]:
+#         if col in data:
+#             fields.append(f"usrlst_{col}=%s")
+#             values.append(data[col])
+#
+#             if col == "department_id":
+#                 department_id = data[col]
+#
+#     if not fields:
+#         return jsonify({"error": "No fields to update"}), 400
+#
+#     fields.append("usrlst_last_updated=NOW()")
+#     values.append(user_id)
+#
+#     conn = get_db_connection()
+#     cursor = conn.cursor()
+#
+#     cursor.execute(
+#         f"""
+#         UPDATE user_list
+#         SET {', '.join(fields)}
+#         WHERE usrlst_id=%s
+#         """,
+#         tuple(values)
+#     )
+#
+#     if department_id:
+#         cursor.execute("""
+#             SELECT dept_name
+#             FROM departments
+#             WHERE dept_id = %s
+#         """, (department_id,))
+#
+#         dept_row = cursor.fetchone()
+#         if dept_row:
+#             department_name = dept_row[0]
+#
+#     conn.commit()
+#     cursor.close()
+#     conn.close()
+#
+#     log_activity(
+#         user_id=claims.get("sub"),
+#         user_group_id=claims.get("user_group_id"),
+#         department=department_name,
+#         email=claims.get("email"),
+#         action=f"User Updated (ID {user_id})"
+#     )
+#
+#     return jsonify({"message": "User updated"}), 200
 
 # --------------------------------------------------
 # DELETE USER (ADMIN ONLY)

@@ -134,25 +134,30 @@ def edit_business_unit():
 
     data = request.get_json() or {}
 
-    usrbu_id = data.get("usrbu_id")
+    #usrbu_id = data.get("usrbu_id")
     new_name = data.get("business_unit_name")
     user_group_id = claims.get("user_group_id")
 
-    if not usrbu_id or not new_name:
-        return jsonify({"error": "Business unit ID and new name required"}), 400
+    # if not usrbu_id or not new_name:
+    #     return jsonify({"error": "Business unit ID and new name required"}), 400
+
+    if not new_name:
+        return jsonify({
+            "error": "Business unit name is required"
+        }), 400
 
     conn = get_db_connection()
     cursor = conn.cursor()
 
     try:
-        # ✅ Verify ownership
 
-        cursor.execute("""
-                   SELECT usrbu_business_unit_name
-                   FROM user_business_unit
-                   WHERE usrbu_id = %s
-                     AND usrbu_user_group_id = %s
-               """, (usrbu_id, user_group_id))
+
+        # cursor.execute("""
+        #            SELECT usrbu_business_unit_name
+        #            FROM user_business_unit
+        #            WHERE usrbu_id = %s
+        #              AND usrbu_user_group_id = %s
+        #        """, (usrbu_id, user_group_id))
 
         # cursor.execute("""
         #     SELECT 1
@@ -163,17 +168,30 @@ def edit_business_unit():
         # if not cursor.fetchone():
         #     return jsonify({"error": "Business unit not found"}), 404
 
+        cursor.execute("""
+                    SELECT usrbu_business_unit_name
+                    FROM user_business_unit
+                    WHERE usrbu_user_group_id = %s
+                    LIMIT 1
+                """, (user_group_id,))
+
         row = cursor.fetchone()
         if not row:
             return jsonify({"error": "Business unit not found"}), 404
 
         old_name = row["usrbu_business_unit_name"]
 
+        # cursor.execute("""
+        #     UPDATE user_business_unit
+        #     SET usrbu_business_unit_name = %s
+        #     WHERE usrbu_id = %s
+        # """, (new_name, usrbu_id))
+
         cursor.execute("""
-            UPDATE user_business_unit
-            SET usrbu_business_unit_name = %s
-            WHERE usrbu_id = %s
-        """, (new_name, usrbu_id))
+                    UPDATE user_business_unit
+                    SET usrbu_business_unit_name = %s
+                    WHERE usrbu_user_group_id = %s
+                """, (new_name, user_group_id))
 
         conn.commit()
 
