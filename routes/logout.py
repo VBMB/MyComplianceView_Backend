@@ -60,8 +60,6 @@ def logout():
 
 
 
-
-
         # cursor.execute("""
         #     SELECT usrdept_department_name
         #     FROM user_departments

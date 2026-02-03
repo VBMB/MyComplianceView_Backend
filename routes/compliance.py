@@ -1421,6 +1421,7 @@ def delete_regulatory_compliance(compliance_id):
               AND regcmp_user_id = %s
         """, (compliance_id, user_id))
 
+
         deleted_count = cursor.rowcount
 
         conn.commit()
