@@ -197,6 +197,25 @@ def add_regulatory_compliance():
         conn = get_db_connection()
         cursor = conn.cursor(pymysql.cursors.DictCursor)
 
+
+        # department_name
+        cursor.execute("""
+                    SELECT ud.usrdept_department_name AS department_name
+                    FROM user_list ul
+                    LEFT JOIN user_departments ud
+                        ON ul.usrlst_department_id = ud.usrdept_id
+                    WHERE ul.usrlst_id = %s
+                      AND ul.usrlst_user_group_id = %s
+                """, (user_id, user_group_id))
+
+        dept_row = cursor.fetchone()
+        department_name = (
+            dept_row["department_name"]
+            if dept_row and dept_row["department_name"]
+            else "N/A"
+        )
+
+        #compliance
         cursor.execute("""
             SELECT *
             FROM compliance_list
@@ -292,7 +311,7 @@ def add_regulatory_compliance():
         log_activity(
             user_id=user_id,
             user_group_id=user_group_id,
-            department="Compliance",
+            department=department_name,
             email=claims.get("email"),
             action=f"Regulatory Compliance Added | Act: {data['regcmp_act']} | Country: {data['regcmp_country']}"
         )
@@ -367,7 +386,24 @@ def add_custom_compliance():
         )
 
         conn = get_db_connection()
-        cursor = conn.cursor()
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
+
+        # department_name
+        cursor.execute("""
+                    SELECT ud.usrdept_department_name AS department_name
+                    FROM user_list ul
+                    LEFT JOIN user_departments ud
+                        ON ul.usrlst_department_id = ud.usrdept_id
+                    WHERE ul.usrlst_id = %s
+                      AND ul.usrlst_user_group_id = %s
+                """, (user_id, user_group_id))
+
+        dept_row = cursor.fetchone()
+        department_name = (
+            dept_row["department_name"]
+            if dept_row and dept_row["department_name"]
+            else "N/A"
+        )
 
         insert_sql = """
         INSERT INTO self_compliance (
@@ -475,6 +511,18 @@ def add_custom_compliance():
         conn.commit()
         cursor.close()
         conn.close()
+
+        log_activity(
+            user_id=user_id,
+            user_group_id=user_group_id,
+            department=department_name,
+            email=claims.get("email"),
+            action=(
+                f"Custom Compliance Added | "
+                f"Act: {data['slfcmp_act']} | "
+                f"Particular: {data['slfcmp_particular']}"
+            )
+        )
 
         return jsonify({
             "message": "Custom compliance added successfully",
@@ -731,7 +779,24 @@ def edit_custom_compliance(slfcmp_id):
             }), 400
 
         conn = get_db_connection()
-        cursor = conn.cursor()
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
+
+        #department_name
+        cursor.execute("""
+                    SELECT ud.usrdept_department_name AS department_name
+                    FROM user_list ul
+                    LEFT JOIN user_departments ud
+                        ON ul.usrlst_department_id = ud.usrdept_id
+                    WHERE ul.usrlst_id = %s
+                      AND ul.usrlst_user_group_id = %s
+                """, (user_id, user_group_id))
+
+        dept_row = cursor.fetchone()
+        department_name = (
+            dept_row["department_name"]
+            if dept_row and dept_row["department_name"]
+            else "N/A"
+        )
 
         cursor.execute("""
             SELECT slfcmp_status
@@ -772,7 +837,7 @@ def edit_custom_compliance(slfcmp_id):
         log_activity(
             user_id=user_id,
             user_group_id=user_group_id,
-            department="Compliance",
+            department=department_name,
             email=claims.get("email"),
             action=(
                 f"Custom Compliance Updated | "
@@ -839,7 +904,23 @@ def edit_regulatory_compliance(regcmp_id):
             }), 400
 
         conn = get_db_connection()
-        cursor = conn.cursor()
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
+
+        cursor.execute("""
+                    SELECT ud.usrdept_department_name AS department_name
+                    FROM user_list ul
+                    LEFT JOIN user_departments ud
+                        ON ul.usrlst_department_id = ud.usrdept_id
+                    WHERE ul.usrlst_id = %s
+                      AND ul.usrlst_user_group_id = %s
+                """, (user_id, user_group_id))
+
+        dept_row = cursor.fetchone()
+        department_name = (
+            dept_row["department_name"]
+            if dept_row and dept_row["department_name"]
+            else "N/A"
+        )
 
         cursor.execute("""
             SELECT regcmp_status
@@ -881,7 +962,7 @@ def edit_regulatory_compliance(regcmp_id):
         log_activity(
             user_id=user_id,
             user_group_id=user_group_id,
-            department="Compliance",
+            department=department_name,
             email=claims.get("email"),
             action=f"Regulatory Compliance Updated | ID: {regcmp_id} | Fields: {', '.join(updates.keys())}"
         )
@@ -913,7 +994,25 @@ def edit_custom_action_date(slfcmp_id):
         new_action_date = data["slfcmp_action_date"]
 
         conn = get_db_connection()
-        cursor = conn.cursor()
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
+
+
+        #department_name
+        cursor.execute("""
+                    SELECT ud.usrdept_department_name AS department_name
+                    FROM user_list ul
+                    LEFT JOIN user_departments ud
+                        ON ul.usrlst_department_id = ud.usrdept_id
+                    WHERE ul.usrlst_id = %s
+                      AND ul.usrlst_user_group_id = %s
+                """, (user_id, user_group_id))
+
+        dept_row = cursor.fetchone()
+        department_name = (
+            dept_row["department_name"]
+            if dept_row and dept_row["department_name"]
+            else "N/A"
+        )
 
         cursor.execute("""
             UPDATE self_compliance
@@ -938,7 +1037,7 @@ def edit_custom_action_date(slfcmp_id):
         log_activity(
             user_id=user_id,
             user_group_id=user_group_id,
-            department="Compliance",
+            department=department_name,
             email=claims.get("email"),
             action=f"Custom Compliance Action Date Updated | ID: {slfcmp_id} | New Date: {new_action_date}"
         )
@@ -1132,7 +1231,24 @@ def delete_regulatory_compliance(compliance_id):
         user_group_id = claims.get("user_group_id")
 
         conn = get_db_connection()
-        cursor = conn.cursor()
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
+
+        #department_name
+        cursor.execute("""
+                    SELECT ud.usrdept_department_name AS department_name
+                    FROM user_list ul
+                    LEFT JOIN user_departments ud
+                        ON ul.usrlst_department_id = ud.usrdept_id
+                    WHERE ul.usrlst_id = %s
+                      AND ul.usrlst_user_group_id = %s
+                """, (user_id, user_group_id))
+
+        dept_row = cursor.fetchone()
+        department_name = (
+            dept_row["department_name"]
+            if dept_row and dept_row["department_name"]
+            else "N/A"
+        )
 
 
         cursor.execute("""
@@ -1167,7 +1283,7 @@ def delete_regulatory_compliance(compliance_id):
         log_activity(
             user_id=user_id,
             user_group_id=user_group_id,
-            department="Compliance",
+            department=department_name,
             email=claims.get("email"),
             action=f"Regulatory Compliance Deleted | Compliance ID: {compliance_id} | Instances: {deleted_count}"
         )
@@ -1192,8 +1308,41 @@ def delete_custom_compliance(compliance_id):
         user_group_id = claims.get("user_group_id")
 
         conn = get_db_connection()
-        cursor = conn.cursor()
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
 
+
+        #department
+        cursor.execute("""
+                    SELECT ud.usrdept_department_name AS department_name
+                    FROM user_list ul
+                    LEFT JOIN user_departments ud
+                        ON ul.usrlst_department_id = ud.usrdept_id
+                    WHERE ul.usrlst_id = %s
+                      AND ul.usrlst_user_group_id = %s
+                """, (user_id, user_group_id))
+
+        dept_row = cursor.fetchone()
+        department_name = (
+            dept_row["department_name"]
+            if dept_row and dept_row["department_name"]
+            else "N/A"
+        )
+
+        cursor.execute("""
+                    SELECT ud.usrdept_department_name AS department_name
+                    FROM user_list ul
+                    LEFT JOIN user_departments ud
+                        ON ul.usrlst_department_id = ud.usrdept_id
+                    WHERE ul.usrlst_id = %s
+                      AND ul.usrlst_user_group_id = %s
+                """, (user_id, user_group_id))
+
+        dept_row = cursor.fetchone()
+        department_name = (
+            dept_row["department_name"]
+            if dept_row and dept_row["department_name"]
+            else "N/A"
+        )
 
         cursor.execute("""
             SELECT COUNT(*) AS count
@@ -1227,7 +1376,7 @@ def delete_custom_compliance(compliance_id):
         log_activity(
             user_id=user_id,
             user_group_id=user_group_id,
-            department="Compliance",
+            department=department_name,
             email=claims.get("email"),
             action=f"Custom Compliance Deleted | Compliance ID: {compliance_id} | Instances: {deleted_count}"
         )

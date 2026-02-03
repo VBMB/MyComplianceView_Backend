@@ -14,20 +14,62 @@ def logout():
         claims = get_jwt()
 
         email = claims.get("email")
-        department_id = claims.get("department_id")
+        # department_id = claims.get("department_id")
         user_group_id = claims.get("user_group_id")
 
         conn = get_db_connection()
-        cursor = conn.cursor()
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
 
+
+        #department
         cursor.execute("""
-            SELECT usrdept_department_name
-            FROM user_departments
-            WHERE usrdept_id = %s
-        """, (department_id,))
+                    SELECT ud.usrdept_department_name
+                    FROM user_list ul
+                    JOIN user_departments ud
+                        ON ul.usrlst_department_id = ud.usrdept_id
+                    WHERE ul.usrlst_id = %s
+                      AND ul.usrlst_user_group_id = %s
+                """, (user_id, user_group_id))
 
-        dept_row = cursor.fetchone()
-        department_name = dept_row["usrdept_department_name"] if dept_row else "Unknown Department"
+        row = cursor.fetchone()
+
+        cursor.close()
+        conn.close()
+
+        if not row:
+            return jsonify({
+                "error": "User department not found. Logout aborted."
+            }), 400
+
+        department_name = row["usrdept_department_name"]
+
+
+        log_activity(
+            user_id=user_id,
+            user_group_id=user_group_id,
+            department=department_name,
+            email=email,
+            action="Logged Out"
+        )
+
+        return jsonify({"message": "Logged out successfully"}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+
+
+
+
+        # cursor.execute("""
+        #     SELECT usrdept_department_name
+        #     FROM user_departments
+        #     WHERE usrdept_id = %s
+        # """, (department_id,))
+        #
+        # dept_row = cursor.fetchone()
+        # department_name = dept_row["usrdept_department_name"] if dept_row else "Unknown Department"
 
         # action_message = (
         #     f"User ID: {user_id} | "
@@ -60,18 +102,18 @@ def logout():
         #
         # conn.commit()
 
-        log_activity(
-            user_id=user_id,
-            user_group_id=user_group_id,
-            department=department_name,
-            email=email,
-            action="Logged Out"
-        )
-
-        cursor.close()
-        conn.close()
-
-        return jsonify({"message": "Logged out successfully"}), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    #     log_activity(
+    #         user_id=user_id,
+    #         user_group_id=user_group_id,
+    #         department=department_name,
+    #         email=email,
+    #         action="Logged Out"
+    #     )
+    #
+    #     cursor.close()
+    #     conn.close()
+    #
+    #     return jsonify({"message": "Logged out successfully"}), 200
+    #
+    # except Exception as e:
+    #     return jsonify({"error": str(e)}), 500
