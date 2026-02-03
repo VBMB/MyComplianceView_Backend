@@ -597,7 +597,6 @@ def dashboard_admin():
 #         if conn:
 #             conn.close()
 
-
 #fixed by sanskar
 @dashboard_bp.route("/impact_assessment", methods=["GET"])
 @jwt_required()
