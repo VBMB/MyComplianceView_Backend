@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt
+from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity
 from database import get_db_connection
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
@@ -953,24 +953,35 @@ def edit_custom_action_date(slfcmp_id):
     
 
 
-UPLOAD_FOLDER = "uploads/compliance_docs"
+UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
 
 @compliance_bp.route("/regulatory/send-to-approver", methods=["POST"])
 @jwt_required()
 def send_compliance_to_approver():
     try:
-        user_id = get_jwt().get("sub")
+        user_id = get_jwt_identity()
 
         approver_email = request.form.get("approver_email")
         compliance_instance_id = request.form.get("compliance_instance_id")
         file = request.files.get("attachment")
 
         if not approver_email or not compliance_instance_id:
-            return jsonify({"error": "Approver email and compliance instance ID required"}), 400
+            return jsonify({
+                "error": "Approver email and compliance instance ID required"
+            }), 400
 
         conn = get_db_connection()
         cursor = conn.cursor(pymysql.cursors.DictCursor)
+
+        cursor.execute("""
+            SELECT usrlst_name
+            FROM user_list
+            WHERE usrlst_id = %s
+        """, (user_id,))
+        user = cursor.fetchone()
+        user_name = user["usrlst_name"] if user else "Unknown User"
 
         cursor.execute("""
             SELECT *
@@ -984,7 +995,9 @@ def send_compliance_to_approver():
         if not compliance:
             cursor.close()
             conn.close()
-            return jsonify({"error": "Compliance instance not found"}), 404
+            return jsonify({
+                "error": "Compliance instance not found"
+            }), 404
 
         attachment_path = None
         if file:
@@ -992,7 +1005,6 @@ def send_compliance_to_approver():
             attachment_path = os.path.join(UPLOAD_FOLDER, filename)
             file.save(attachment_path)
 
-        # Update status
         cursor.execute("""
             UPDATE regulatory_compliance
             SET regcmp_status = %s
@@ -1007,41 +1019,147 @@ def send_compliance_to_approver():
         email_body = f"""
 Dear Approver,
 
-A compliance action has been submitted for your review.
+A regulatory compliance action has been submitted for your review and approval.
 
-Compliance Details:
--------------------
-Compliance ID   : {compliance['regcmp_compliance_id']}
-Action Date     : {compliance['regcmp_action_date']}
-Previous Status : {compliance['regcmp_status']}
-New Status      : Requested
+--------------------------------------------------
+COMPLIANCE DETAILS
+--------------------------------------------------
+Compliance ID     : {compliance['regcmp_compliance_id']}
+Compliance Title  : {compliance['regcmp_title']}
+Act / Regulation  : {compliance['regcmp_act']}
+Action Due Date   : {compliance['regcmp_action_date']}
 
-Submitted By User ID: {user_id}
+--------------------------------------------------
+STATUS UPDATE
+--------------------------------------------------
+Previous Status   : {compliance['regcmp_status']}
+Current Status    : Requested
+
+--------------------------------------------------
+SUBMITTED BY
+--------------------------------------------------
+Name              : {user_name}
+User ID           : {user_id}
+
+--------------------------------------------------
+ATTACHMENTS
+--------------------------------------------------
+Supporting documents have been attached for your reference (if applicable).
+
+Please review the compliance details and take the appropriate action at your earliest convenience.
 
 Regards,
-Compliance System
-        """
+Compliance Management System
+(This is an automated notification. Please do not reply.)
+"""
 
         send_email(
             to_email=approver_email,
-            subject="Compliance Approval Required",
+            subject="Compliance Approval Required - Action Pending",
             body=email_body,
             attachment_path=attachment_path
         )
 
         return jsonify({
-            "message": "Email sent and compliance status updated to Requested"
+            "message": "Compliance sent to approver and status updated to Requested"
         }), 200
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({
+            "error": str(e)
+        }), 500
 
 #custom
+# @compliance_bp.route("/custom/send_to_approver", methods=["POST"])
+# @jwt_required()
+# def send_custom_compliance_to_approver():
+#     try:
+#         user_id = get_jwt().get("sub")
+
+#         approver_email = request.form.get("approver_email")
+#         compliance_instance_id = request.form.get("compliance_instance_id")
+#         file = request.files.get("attachment")
+
+#         if not approver_email or not compliance_instance_id:
+#             return jsonify({
+#                 "error": "Approver email and compliance instance ID required"
+#             }), 400
+
+#         conn = get_db_connection()
+#         cursor = conn.cursor(pymysql.cursors.DictCursor)
+
+#         cursor.execute("""
+#             SELECT *
+#             FROM self_compliance
+#             WHERE slfcmp_id = %s
+#               AND slfcmp_user_id = %s
+#         """, (compliance_instance_id, user_id))
+
+#         compliance = cursor.fetchone()
+
+#         if not compliance:
+#             cursor.close()
+#             conn.close()
+#             return jsonify({
+#                 "error": "Compliance instance not found"
+#             }), 404
+
+#         attachment_path = None
+#         if file:
+#             filename = secure_filename(file.filename)
+#             attachment_path = os.path.join(UPLOAD_FOLDER, filename)
+#             file.save(attachment_path)
+
+#         # Update status
+#         cursor.execute("""
+#             UPDATE self_compliance
+#             SET slfcmp_status = %s
+#             WHERE slfcmp_id = %s
+#               AND slfcmp_user_id = %s
+#         """, ("Requested", compliance_instance_id, user_id))
+
+#         conn.commit()
+#         cursor.close()
+#         conn.close()
+
+#         email_body = f"""
+# Dear Approver,
+
+# A compliance action has been submitted for your review.
+
+# Compliance Details:
+# -------------------
+# Compliance ID   : {compliance['slfcmp_id']}
+# Action Date     : {compliance['slfcmp_action_date']}
+# Previous Status : {compliance['slfcmp_status']}
+# New Status      : Requested
+
+# Submitted By User ID: {user_id}
+
+# Regards,
+# Compliance System
+#         """
+
+#         send_email(
+#             to_email=approver_email,
+#             subject="Compliance Approval Required",
+#             body=email_body,
+#             attachment_path=attachment_path
+#         )
+
+#         return jsonify({
+#             "message": "Email sent and compliance status updated to Requested"
+#         }), 200
+
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
+
 @compliance_bp.route("/custom/send_to_approver", methods=["POST"])
 @jwt_required()
 def send_custom_compliance_to_approver():
     try:
-        user_id = get_jwt().get("sub")
+        # Get logged-in user ID
+        user_id = get_jwt_identity()
 
         approver_email = request.form.get("approver_email")
         compliance_instance_id = request.form.get("compliance_instance_id")
@@ -1054,6 +1172,14 @@ def send_custom_compliance_to_approver():
 
         conn = get_db_connection()
         cursor = conn.cursor(pymysql.cursors.DictCursor)
+        
+        cursor.execute("""
+            SELECT usrlst_name
+            FROM user_list
+            WHERE usrlst_id = %s
+        """, (user_id,))
+        user = cursor.fetchone()
+        user_name = user["usrlst_name"] if user else "Unknown User"
 
         cursor.execute("""
             SELECT *
@@ -1077,7 +1203,6 @@ def send_custom_compliance_to_approver():
             attachment_path = os.path.join(UPLOAD_FOLDER, filename)
             file.save(attachment_path)
 
-        # Update status
         cursor.execute("""
             UPDATE self_compliance
             SET slfcmp_status = %s
@@ -1092,34 +1217,56 @@ def send_custom_compliance_to_approver():
         email_body = f"""
 Dear Approver,
 
-A compliance action has been submitted for your review.
+A custom compliance action has been submitted for your review and approval.
 
-Compliance Details:
--------------------
-Compliance ID   : {compliance['slfcmp_id']}
-Action Date     : {compliance['slfcmp_action_date']}
-Previous Status : {compliance['slfcmp_status']}
-New Status      : Requested
+--------------------------------------------------
+COMPLIANCE DETAILS
+--------------------------------------------------
+Compliance ID     : {compliance['slfcmp_id']}
+Compliance Title  : {compliance.get('slfcmp_particular', 'N/A')}
+Act / Category    : {compliance.get('slfcmp_act', 'N/A')}
+Action Due Date   : {compliance['slfcmp_action_date']}
 
-Submitted By User ID: {user_id}
+--------------------------------------------------
+STATUS UPDATE
+--------------------------------------------------
+Previous Status   : {compliance['slfcmp_status']}
+Current Status    : Requested
+
+--------------------------------------------------
+SUBMITTED BY
+--------------------------------------------------
+Name              : {user_name}
+User ID           : {user_id}
+
+--------------------------------------------------
+ATTACHMENTS
+--------------------------------------------------
+Supporting documents have been attached for your reference (if applicable).
+
+Please review the compliance details and take the appropriate action at your earliest convenience.
 
 Regards,
-Compliance System
-        """
+Compliance Management System
+(This is an automated notification. Please do not reply.)
+"""
 
+        # Send email
         send_email(
             to_email=approver_email,
-            subject="Compliance Approval Required",
+            subject="Custom Compliance Approval Required - Action Pending",
             body=email_body,
             attachment_path=attachment_path
         )
 
         return jsonify({
-            "message": "Email sent and compliance status updated to Requested"
+            "message": "Custom compliance sent to approver and status updated to Requested"
         }), 200
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({
+            "error": str(e)
+        }), 500
 
 
 # delete regulatory
