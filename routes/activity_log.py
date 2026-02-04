@@ -1,9 +1,12 @@
 from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required, get_jwt
 from database import get_db_connection
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 activity_log_bp = Blueprint('activity_log_bp', __name__, url_prefix="/activity_log")
+
+
+IST = timezone(timedelta(hours=5, minutes=30))
 
 @activity_log_bp.route('/', methods=['GET'])
 @jwt_required()
@@ -25,43 +28,15 @@ def get_activity_logs():
                         acty_user_group_id,
                         acty_department,
                         acty_email,
-                        acty_date,
-                        acty_time,
+                        # acty_date,
+                        # acty_time,
                         acty_action
                     FROM activity_log
                     WHERE acty_user_group_id = %s
                     ORDER BY acty_date DESC, acty_time DESC
                 """, (user_group_id,))
 
-        # cursor.execute("""
-        #     SELECT usrlst_email
-        #     FROM user_list
-        #     WHERE usrlst_company_name = %s
-        # """, (user_company,))
-        # user_emails = [row['usrlst_email'] for row in cursor.fetchall()]
-        #
-        # if not user_emails:
-        #     cursor.close()
-        #     conn.close()
-        #     return jsonify({"message": "No users found for this company"}), 404
-        #
-        # format_strings = ','.join(['%s'] * len(user_emails))
-        # query = f"""
-        #     SELECT
-        #         a.acty_department,
-        #         a.acty_email,
-        #         a.acty_date,
-        #         a.acty_time,
-        #         a.acty_action,
-        #         u.usrlst_name,
-        #         u.usrlst_role,
-        #         u.usrlst_company_name
-        #     FROM activity_log a
-        #     JOIN user_list u ON a.acty_email = u.usrlst_email
-        #     WHERE a.acty_email IN ({format_strings})
-        #     ORDER BY a.acty_date DESC, a.acty_time DESC
-        # """
-        # cursor.execute(query, tuple(user_emails))
+
 
 
         activities = cursor.fetchall()
@@ -69,15 +44,23 @@ def get_activity_logs():
         cursor.close()
         conn.close()
 
+        ist_now = datetime.now(timezone.utc).astimezone(IST)
+
         for activity in activities:
-            for key, value in activity.items():
-                if isinstance(value, (datetime, timedelta)):
-                    activity[key] = str(value)
+            activity["acty_date"] = ist_now.strftime("%Y-%m-%d")
+            activity["acty_time"] = ist_now.strftime("%H:%M:%S")
+
+        # for activity in activities:
+        #     for key, value in activity.items():
+        #         if isinstance(value, (datetime, timedelta)):
+        #             activity[key] = str(value)
 
         return jsonify({
+            "timezone": "IST",
             "total_records": len(activities),
             "activities": activities
         }), 200
+
 
     except Exception as e:
         import traceback
