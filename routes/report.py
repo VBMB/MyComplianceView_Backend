@@ -169,7 +169,8 @@ def compliance_report():
         cursor.close()
         conn.close()
 
-        all_rows = regulatory_rows + self_rows
+        # all_rows = regulatory_rows + self_rows
+        all_rows = list(regulatory_rows) + list(self_rows)
         all_rows.sort(
             key=lambda x: x["action_date"] if x["action_date"] else date.max
         )
@@ -269,7 +270,8 @@ def user_compliance_report():
         cursor.close()
         conn.close()
 
-        all_rows = regulatory_rows + self_rows
+        # all_rows = regulatory_rows + self_rows
+        all_rows = list(regulatory_rows) + list(self_rows)
         all_rows.sort(
             key=lambda x: x["action_date"] if x["action_date"] else date.max
         )
