@@ -1,4 +1,4 @@
-from itsdangerous import URLSafeTimedSerializer
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from flask import current_app
 
 
@@ -16,8 +16,22 @@ def verify_action_token(token, max_age=86400):
     """
     s = URLSafeTimedSerializer(current_app.config["SECRET_KEY"])
 
-    return s.loads(
-        token,
-        salt="compliance-approval",
-        max_age=max_age
-    )
+    try:
+        data = s.loads(
+            token,
+            salt="compliance-approval",
+            max_age=max_age
+        )
+        return data
+
+    except SignatureExpired:
+        print("❌ Token expired")
+        return None
+
+    except BadSignature:
+        print("❌ Invalid token signature")
+        return None
+
+    except Exception as e:
+        print("❌ Token error:", str(e))
+        return None

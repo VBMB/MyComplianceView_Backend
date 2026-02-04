@@ -20,6 +20,7 @@ import os
 import smtplib
 from flask import url_for
 from utils.token import generate_action_token
+import uuid
 
 compliance_bp = Blueprint('compliance_bp', __name__, url_prefix="/compliance")
 
@@ -1095,35 +1096,32 @@ def send_compliance_to_approver():
             }), 404
 
 
+        token = str(uuid.uuid4())
+
         attachment_path = None
 
         if file:
-
             filename = secure_filename(file.filename)
-
-            if not os.path.exists(UPLOAD_FOLDER):
-                os.makedirs(UPLOAD_FOLDER)
 
             attachment_path = os.path.join(UPLOAD_FOLDER, filename)
 
             file.save(attachment_path)
 
+
         cursor.execute("""
             UPDATE regulatory_compliance
-            SET regcmp_status = %s
+            SET regcmp_status = %s,
+                approval_token = %s,
+                token_created_at = NOW()
             WHERE regcmp_id = %s
               AND regcmp_user_id = %s
-        """, ("Requested", compliance_instance_id, user_id))
+        """, ("Requested", token, compliance_instance_id, user_id))
+
 
         conn.commit()
 
         cursor.close()
         conn.close()
-
-        token = generate_action_token({
-            "regcmp_id": compliance_instance_id,
-            "approver": approver_email
-        })
 
         approve_url = url_for(
             "compliance_bp.approve_compliance",
@@ -1176,27 +1174,19 @@ def send_compliance_to_approver():
 
 <br><br>
 
-<!-- Buttons -->
-
 <table cellpadding="12">
 <tr>
 
 <td bgcolor="#28a745">
 <a href="{approve_url}"
-   style="color:white;
-          text-decoration:none;
-          font-weight:bold;
-          font-size:15px;">
+   style="color:white;text-decoration:none;font-weight:bold;">
 Approve
 </a>
 </td>
 
 <td bgcolor="#dc3545">
 <a href="{decline_url}"
-   style="color:white;
-          text-decoration:none;
-          font-weight:bold;
-          font-size:15px;">
+   style="color:white;text-decoration:none;font-weight:bold;">
 Decline
 </a>
 </td>
@@ -1205,10 +1195,6 @@ Decline
 </table>
 
 <br>
-
-<p>
-If buttons do not work, use links below:
-</p>
 
 <p>
 Approve: <a href="{approve_url}">{approve_url}</a><br>
@@ -1226,7 +1212,6 @@ Compliance System
 </html>
 """
 
-        print("EMAIL BODY:\n", email_body)
 
         send_email(
             to_email=approver_email,
@@ -1235,14 +1220,19 @@ Compliance System
             attachment_path=attachment_path
         )
 
+
         return jsonify({
             "message": "Email sent successfully"
         }), 200
 
+
     except Exception as e:
+        print("ERROR:", str(e))
+
         return jsonify({
             "error": str(e)
         }), 500
+
 
 
 @compliance_bp.route("/custom/send_to_approver", methods=["POST"])
@@ -1358,7 +1348,6 @@ Compliance Management System
         return jsonify({
             "error": str(e)
         }), 500
-
 
 # delete regulatory
 @compliance_bp.route("/delete/regulatory/<int:compliance_id>", methods=["DELETE"])
@@ -1531,77 +1520,90 @@ def delete_custom_compliance(compliance_id):
         return jsonify({"error": str(e)}), 500
 
 
-#approve api added by sanskar
 @compliance_bp.route("/regulatory/approve/<token>", methods=["GET"])
 def approve_compliance(token):
 
-    try:
-        from utils import verify_action_token
+    conn = get_db_connection()
+    cursor = conn.cursor(pymysql.cursors.DictCursor)
 
-        data = verify_action_token(token)
+    cursor.execute("""
+        SELECT regcmp_id, regcmp_status
+        FROM regulatory_compliance
+        WHERE approval_token = %s
+    """, (token,))
 
-        regcmp_id = data["regcmp_id"]
-        approver = data["approver"]
+    record = cursor.fetchone()
 
-        conn = get_db_connection()
-        cursor = conn.cursor()
 
-        cursor.execute("""
-            UPDATE regulatory_compliance
-            SET regcmp_status = %s,
-                regcmp_approved_by = %s,
-                regcmp_approved_at = NOW()
-            WHERE regcmp_id = %s
-            AND regcmp_status = 'Requested'
-        """, ("Approved", approver, regcmp_id))
-
-        conn.commit()
-
-        updated = cursor.rowcount
-
+    if not record:
         cursor.close()
         conn.close()
+        return "<h3>Invalid Link</h3>", 400
 
-        if updated == 0:
-            return "<h3>Already Processed</h3>"
 
-        return "<h2 style='color:green'>Compliance Approved</h2>"
+    if record["regcmp_status"] != "Requested":
+        cursor.close()
+        conn.close()
+        return "<h3>Already Processed</h3>"
 
-    except Exception:
-        return "<h3>Invalid or Expired Link</h3>", 400
+
+    cursor.execute("""
+        UPDATE regulatory_compliance
+        SET regcmp_status = 'Approved',
+            regcmp_approved_at = NOW(),
+            approval_token = NULL
+        WHERE regcmp_id = %s
+    """, (record["regcmp_id"],))
+
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+
+    return "<h2 style='color:green'>Compliance Approved</h2>"
+
 
 @compliance_bp.route("/regulatory/decline/<token>", methods=["GET"])
 def decline_compliance(token):
 
-    try:
-        from utils import verify_action_token
+    conn = get_db_connection()
+    cursor = conn.cursor(pymysql.cursors.DictCursor)
 
-        data = verify_action_token(token)
+    cursor.execute("""
+        SELECT regcmp_id, regcmp_status
+        FROM regulatory_compliance
+        WHERE approval_token = %s
+    """, (token,))
 
-        regcmp_id = data["regcmp_id"]
+    record = cursor.fetchone()
 
-        conn = get_db_connection()
-        cursor = conn.cursor()
 
-        cursor.execute("""
-            UPDATE regulatory_compliance
-            SET regcmp_status = %s,
-                regcmp_declined_at = NOW()
-            WHERE regcmp_id = %s
-            AND regcmp_status = 'Requested'
-        """, ("Declined", regcmp_id))
-
-        conn.commit()
-
-        updated = cursor.rowcount
-
+    if not record:
         cursor.close()
         conn.close()
+        return "<h3>Invalid Link</h3>", 400
 
-        if updated == 0:
-            return "<h3>Already Processed</h3>"
 
-        return "<h2 style='color:red'>Compliance Declined</h2>"
+    if record["regcmp_status"] != "Requested":
+        cursor.close()
+        conn.close()
+        return "<h3>Already Processed</h3>"
 
-    except Exception:
-        return "<h3>Invalid or Expired Link</h3>", 400
+
+    cursor.execute("""
+        UPDATE regulatory_compliance
+        SET regcmp_status = 'Declined',
+            regcmp_declined_at = NOW(),
+            approval_token = NULL
+        WHERE regcmp_id = %s
+    """, (record["regcmp_id"],))
+
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+
+    return "<h2 style='color:red'>Compliance Declined</h2>"
+
