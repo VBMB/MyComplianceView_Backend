@@ -3,6 +3,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from database import get_db_connection
 from datetime import datetime
 from utils.activity_logger import log_activity
+import pymysql
 
 logout_bp = Blueprint("logout_bp", __name__)
 
