@@ -244,8 +244,7 @@ def update_user(user_id):
         "email": "usrlst_email",
         "contact": "usrlst_contact",
         "business_unit_id": "usrlst_business_unit_id",
-        "department_id": "usrlst_department_id",
-        "login_flag": "usrlst_login_flag"
+        "department_id": "usrlst_department_id"
     }
 
     for key, db_col in field_map.items():
