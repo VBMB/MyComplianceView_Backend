@@ -4,7 +4,7 @@ from flask import current_app
 
 def generate_action_token(data):
     """
-    Generate secure token for approval links
+    Generate secure token for approve/decline
     """
     s = URLSafeTimedSerializer(current_app.config["SECRET_KEY"])
     return s.dumps(data, salt="compliance-approval")
@@ -12,7 +12,7 @@ def generate_action_token(data):
 
 def verify_action_token(token, max_age=86400):
     """
-    Verify token (24 hours expiry)
+    Verify token (valid for 24 hours)
     """
     s = URLSafeTimedSerializer(current_app.config["SECRET_KEY"])
 

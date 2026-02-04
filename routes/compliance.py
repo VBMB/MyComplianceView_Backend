@@ -18,6 +18,8 @@ from email.mime.base import MIMEBase
 from email import encoders
 import os
 import smtplib
+from flask import url_for
+from utils.token import generate_action_token
 
 compliance_bp = Blueprint('compliance_bp', __name__, url_prefix="/compliance")
 
@@ -32,7 +34,7 @@ def send_email(to_email, subject, body, attachment_path=None):
     msg["To"] = to_email
     msg["Subject"] = subject
 
-    msg.attach(MIMEText(body, "plain"))
+    msg.attach(MIMEText(body, "html"))
 
     if attachment_path:
         filename = os.path.basename(attachment_path)
@@ -1055,12 +1057,12 @@ def edit_custom_action_date(slfcmp_id):
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-
 @compliance_bp.route("/regulatory/send-to-approver", methods=["POST"])
 @jwt_required()
 def send_compliance_to_approver():
+
     try:
-        user_id = get_jwt_identity()
+        user_id = get_jwt().get("sub")
 
         approver_email = request.form.get("approver_email")
         compliance_instance_id = request.form.get("compliance_instance_id")
@@ -1071,16 +1073,9 @@ def send_compliance_to_approver():
                 "error": "Approver email and compliance instance ID required"
             }), 400
 
+
         conn = get_db_connection()
         cursor = conn.cursor(pymysql.cursors.DictCursor)
-
-        cursor.execute("""
-            SELECT usrlst_name
-            FROM user_list
-            WHERE usrlst_id = %s
-        """, (user_id,))
-        user = cursor.fetchone()
-        user_name = user["usrlst_name"] if user else "Unknown User"
 
         cursor.execute("""
             SELECT *
@@ -1094,14 +1089,23 @@ def send_compliance_to_approver():
         if not compliance:
             cursor.close()
             conn.close()
+
             return jsonify({
                 "error": "Compliance instance not found"
             }), 404
 
+
         attachment_path = None
+
         if file:
+
             filename = secure_filename(file.filename)
+
+            if not os.path.exists(UPLOAD_FOLDER):
+                os.makedirs(UPLOAD_FOLDER)
+
             attachment_path = os.path.join(UPLOAD_FOLDER, filename)
+
             file.save(attachment_path)
 
         cursor.execute("""
@@ -1112,55 +1116,127 @@ def send_compliance_to_approver():
         """, ("Requested", compliance_instance_id, user_id))
 
         conn.commit()
+
         cursor.close()
         conn.close()
 
+        token = generate_action_token({
+            "regcmp_id": compliance_instance_id,
+            "approver": approver_email
+        })
+
+        approve_url = url_for(
+            "compliance_bp.approve_compliance",
+            token=token,
+            _external=True
+        )
+
+        decline_url = url_for(
+            "compliance_bp.decline_compliance",
+            token=token,
+            _external=True
+        )
+
+        print("APPROVE URL:", approve_url)
+        print("DECLINE URL:", decline_url)
+
+
         email_body = f"""
-Dear Approver,
+<html>
+<body style="font-family: Arial, sans-serif">
 
-A regulatory compliance action has been submitted for your review and approval.
+<h2>Compliance Approval Required</h2>
 
---------------------------------------------------
-COMPLIANCE DETAILS
---------------------------------------------------
-Compliance ID     : {compliance['regcmp_compliance_id']}
-Compliance Title  : {compliance['regcmp_title']}
-Act / Regulation  : {compliance['regcmp_act']}
-Action Due Date   : {compliance['regcmp_action_date']}
+<p>A compliance action has been submitted for review.</p>
 
---------------------------------------------------
-STATUS UPDATE
---------------------------------------------------
-Previous Status   : {compliance['regcmp_status']}
-Current Status    : Requested
+<table border="1" cellpadding="8" cellspacing="0"
+       style="border-collapse: collapse; width:60%;">
 
---------------------------------------------------
-SUBMITTED BY
---------------------------------------------------
-Name              : {user_name}
-User ID           : {user_id}
+<tr>
+<td><b>Compliance ID</b></td>
+<td>{compliance['regcmp_compliance_id']}</td>
+</tr>
 
---------------------------------------------------
-ATTACHMENTS
---------------------------------------------------
-Supporting documents have been attached for your reference (if applicable).
+<tr>
+<td><b>Action Date</b></td>
+<td>{compliance['regcmp_action_date']}</td>
+</tr>
 
-Please review the compliance details and take the appropriate action at your earliest convenience.
+<tr>
+<td><b>Status</b></td>
+<td>Requested</td>
+</tr>
 
-Regards,
-Compliance Management System
-(This is an automated notification. Please do not reply.)
+<tr>
+<td><b>Submitted By</b></td>
+<td>{user_id}</td>
+</tr>
+
+</table>
+
+<br><br>
+
+<!-- Buttons -->
+
+<table cellpadding="12">
+<tr>
+
+<td bgcolor="#28a745">
+<a href="{approve_url}"
+   style="color:white;
+          text-decoration:none;
+          font-weight:bold;
+          font-size:15px;">
+Approve
+</a>
+</td>
+
+<td bgcolor="#dc3545">
+<a href="{decline_url}"
+   style="color:white;
+          text-decoration:none;
+          font-weight:bold;
+          font-size:15px;">
+Decline
+</a>
+</td>
+
+</tr>
+</table>
+
+<br>
+
+<p>
+If buttons do not work, use links below:
+</p>
+
+<p>
+Approve: <a href="{approve_url}">{approve_url}</a><br>
+Decline: <a href="{decline_url}">{decline_url}</a>
+</p>
+
+<hr>
+
+<p>
+Regards,<br>
+Compliance System
+</p>
+
+</body>
+</html>
 """
+
+        print("EMAIL BODY:\n", email_body)
 
         send_email(
             to_email=approver_email,
-            subject="Compliance Approval Required - Action Pending",
+            subject="Compliance Approval Required",
             body=email_body,
             attachment_path=attachment_path
         )
 
         return jsonify({
-            "message": "Compliance sent to approver and status updated to Requested"
+            "message": "Email sent successfully"
         }), 200
 
     except Exception as e:
@@ -1168,90 +1244,6 @@ Compliance Management System
             "error": str(e)
         }), 500
 
-#custom
-# @compliance_bp.route("/custom/send_to_approver", methods=["POST"])
-# @jwt_required()
-# def send_custom_compliance_to_approver():
-#     try:
-#         user_id = get_jwt().get("sub")
-
-#         approver_email = request.form.get("approver_email")
-#         compliance_instance_id = request.form.get("compliance_instance_id")
-#         file = request.files.get("attachment")
-
-#         if not approver_email or not compliance_instance_id:
-#             return jsonify({
-#                 "error": "Approver email and compliance instance ID required"
-#             }), 400
-
-#         conn = get_db_connection()
-#         cursor = conn.cursor(pymysql.cursors.DictCursor)
-
-#         cursor.execute("""
-#             SELECT *
-#             FROM self_compliance
-#             WHERE slfcmp_id = %s
-#               AND slfcmp_user_id = %s
-#         """, (compliance_instance_id, user_id))
-
-#         compliance = cursor.fetchone()
-
-#         if not compliance:
-#             cursor.close()
-#             conn.close()
-#             return jsonify({
-#                 "error": "Compliance instance not found"
-#             }), 404
-
-#         attachment_path = None
-#         if file:
-#             filename = secure_filename(file.filename)
-#             attachment_path = os.path.join(UPLOAD_FOLDER, filename)
-#             file.save(attachment_path)
-
-#         # Update status
-#         cursor.execute("""
-#             UPDATE self_compliance
-#             SET slfcmp_status = %s
-#             WHERE slfcmp_id = %s
-#               AND slfcmp_user_id = %s
-#         """, ("Requested", compliance_instance_id, user_id))
-
-#         conn.commit()
-#         cursor.close()
-#         conn.close()
-
-#         email_body = f"""
-# Dear Approver,
-
-# A compliance action has been submitted for your review.
-
-# Compliance Details:
-# -------------------
-# Compliance ID   : {compliance['slfcmp_id']}
-# Action Date     : {compliance['slfcmp_action_date']}
-# Previous Status : {compliance['slfcmp_status']}
-# New Status      : Requested
-
-# Submitted By User ID: {user_id}
-
-# Regards,
-# Compliance System
-#         """
-
-#         send_email(
-#             to_email=approver_email,
-#             subject="Compliance Approval Required",
-#             body=email_body,
-#             attachment_path=attachment_path
-#         )
-
-#         return jsonify({
-#             "message": "Email sent and compliance status updated to Requested"
-#         }), 200
-
-#     except Exception as e:
-#         return jsonify({"error": str(e)}), 500
 
 @compliance_bp.route("/custom/send_to_approver", methods=["POST"])
 @jwt_required()
@@ -1537,3 +1529,79 @@ def delete_custom_compliance(compliance_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+#approve api added by sanskar
+@compliance_bp.route("/regulatory/approve/<token>", methods=["GET"])
+def approve_compliance(token):
+
+    try:
+        from utils import verify_action_token
+
+        data = verify_action_token(token)
+
+        regcmp_id = data["regcmp_id"]
+        approver = data["approver"]
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            UPDATE regulatory_compliance
+            SET regcmp_status = %s,
+                regcmp_approved_by = %s,
+                regcmp_approved_at = NOW()
+            WHERE regcmp_id = %s
+            AND regcmp_status = 'Requested'
+        """, ("Approved", approver, regcmp_id))
+
+        conn.commit()
+
+        updated = cursor.rowcount
+
+        cursor.close()
+        conn.close()
+
+        if updated == 0:
+            return "<h3>Already Processed</h3>"
+
+        return "<h2 style='color:green'>Compliance Approved</h2>"
+
+    except Exception:
+        return "<h3>Invalid or Expired Link</h3>", 400
+
+@compliance_bp.route("/regulatory/decline/<token>", methods=["GET"])
+def decline_compliance(token):
+
+    try:
+        from utils import verify_action_token
+
+        data = verify_action_token(token)
+
+        regcmp_id = data["regcmp_id"]
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            UPDATE regulatory_compliance
+            SET regcmp_status = %s,
+                regcmp_declined_at = NOW()
+            WHERE regcmp_id = %s
+            AND regcmp_status = 'Requested'
+        """, ("Declined", regcmp_id))
+
+        conn.commit()
+
+        updated = cursor.rowcount
+
+        cursor.close()
+        conn.close()
+
+        if updated == 0:
+            return "<h3>Already Processed</h3>"
+
+        return "<h2 style='color:red'>Compliance Declined</h2>"
+
+    except Exception:
+        return "<h3>Invalid or Expired Link</h3>", 400
