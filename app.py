@@ -50,9 +50,10 @@ def test_db():
         conn.close()
         return f"Connected to database: {db_name['DATABASE()']}"
     except Exception as e:
-        return f"Error connecting to database: {e}"
+        return f"Error connecting to database: {e}"   
 
 # Blueprints
+app.config["SECRET_KEY"] = "super-secret-key-123"
 app.register_blueprint(form_bp, url_prefix="/form")
 app.register_blueprint(user_bp, url_prefix="/user")
 app.register_blueprint(login_bp, url_prefix="/login")
