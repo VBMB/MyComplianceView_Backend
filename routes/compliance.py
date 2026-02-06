@@ -22,7 +22,7 @@ from flask import url_for
 from utils.token import generate_action_token
 import uuid
 
-compliance_bp = Blueprint('compliance_bp', __name__, url_prefix="/compliance")
+compliance_bp = Blueprint('compliance_bp', __name__, url_prefix=" ")
 
 def send_email(to_email, subject, body, attachment_path=None):
     SMTP_SERVER = "mail.pseudoteam.com"

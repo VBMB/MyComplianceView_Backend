@@ -321,164 +321,69 @@ def update_user(user_id):
         cursor.close()
         conn.close()
 
-# --------------------------------------------------
-# UPDATE USER (ADMIN ONLY)
-# --------------------------------------------------
+@user_bp.route("/forgot/password", methods=["POST"])
+def forgot_password():
 
-# @user_bp.route("/update/<int:user_id>", methods=["PUT"])
-# @jwt_required()
-# def update_user(user_id):
-#     claims = get_jwt()
-#     if claims.get("role") != "admin":
-#         return jsonify({"error": "Admin only"}), 403
+    data = request.get_json() or {}
+    email = data.get("email")
 
-#     data = request.get_json() or {}
-#     fields, values = [], []
+    if not email:
+        return jsonify({"error": "Email is required"}), 400
 
-#     # 🔽 CHANGE 1: Added "login_flag" to allow Active/Suspended updates
-#     # 🔽 CHANGE 2: Use `if col in data` instead of `if data.get(col)`
-#     #              This allows login_flag = 0 (suspended) to be saved correctly
-#     for col in ["name", "contact", "department_id", "escalation_mail", "login_flag"]:
-#         if col in data:   # ✅ IMPORTANT FIX
-#             fields.append(f"usrlst_{col}=%s")
-#             values.append(data[col])
+    conn = get_db_connection()
+    cursor = conn.cursor(pymysql.cursors.DictCursor)
 
-#     if not fields:
-#         return jsonify({"error": "No fields to update"}), 400
+    try:
+        cursor.execute("""
+            SELECT usrlst_id, usrlst_name, usrlst_email, usrlst_role
+            FROM user_list
+            WHERE usrlst_email = %s
+        """, (email,))
 
-#     fields.append("usrlst_last_updated=NOW()")
-#     values.append(user_id)
+        user = cursor.fetchone()
 
-#     conn = get_db_connection()
-#     cursor = conn.cursor()
+        if not user:
+            return jsonify({"error": "User not found"}), 404
 
-#     cursor.execute(
-#         f"""
-#         UPDATE user_list
-#         SET {', '.join(fields)}
-#         WHERE usrlst_id=%s
-#         """,
-#         tuple(values)
-#     )
+        ADMIN_EMAIL = "sanskarsharma0119@gmail.com" 
 
-#     conn.commit()
-#     cursor.close()
-#     conn.close()
+        subject = "Forgot Password Request"
 
-#     log_activity(
-#         user_id=claims.get("sub"),
-#         user_group_id=claims.get("user_group_id"),
-#         department=data.get("department_id", "N/A"),
-#         email=claims.get("email"),
-#         action=f"User Updated (ID {user_id})"
-#     )
+        body = f"""
+Hello Admin,
 
-#     return jsonify({"message": "User updated"}), 200
+A user has requested a password reset.
 
-#Code changes made by SS (Inserted deptartment name fetch for logging purpose)
-# @user_bp.route("/update/<int:user_id>", methods=["PUT"])
-# @jwt_required()
-# def update_user(user_id):
-#     claims = get_jwt()
-#
-#     if claims.get("role") != "admin":
-#         return jsonify({"error": "Admin only"}), 403
-#
-#
-#     data = request.get_json() or {}
-#     fields, values = [], []
-#
-#     department_id = None
-#     department_name = "N/A"
-#
-#     for col in ["name", "contact", "department_id", "escalation_mail", "login_flag"]:
-#         if col in data:
-#             fields.append(f"usrlst_{col}=%s")
-#             values.append(data[col])
-#
-#             if col == "department_id":
-#                 department_id = data[col]
-#
-#     if not fields:
-#         return jsonify({"error": "No fields to update"}), 400
-#
-#     fields.append("usrlst_last_updated=NOW()")
-#     values.append(user_id)
-#
-#     conn = get_db_connection()
-#     cursor = conn.cursor()
-#
-#     cursor.execute(
-#         f"""
-#         UPDATE user_list
-#         SET {', '.join(fields)}
-#         WHERE usrlst_id=%s
-#         """,
-#         tuple(values)
-#     )
-#
-#     if department_id:
-#         cursor.execute("""
-#             SELECT dept_name
-#             FROM departments
-#             WHERE dept_id = %s
-#         """, (department_id,))
-#
-#         dept_row = cursor.fetchone()
-#         if dept_row:
-#             department_name = dept_row[0]
-#
-#     conn.commit()
-#     cursor.close()
-#     conn.close()
-#
-#     log_activity(
-#         user_id=claims.get("sub"),
-#         user_group_id=claims.get("user_group_id"),
-#         department=department_name,
-#         email=claims.get("email"),
-#         action=f"User Updated (ID {user_id})"
-#     )
-#
-#     return jsonify({"message": "User updated"}), 200
+User Details:
+---------------------
+User ID : {user['usrlst_id']}
+Name  : {user['usrlst_name']}
+Email : {user['usrlst_email']}
+Role  : {user['usrlst_role']}
 
-# --------------------------------------------------
-# DELETE USER (ADMIN ONLY)
-# --------------------------------------------------
+Please reset the password manually and share with the user.
 
-# @user_bp.route("/delete", methods=["POST"])
-# @jwt_required()
-# def delete_user():
-#     claims = get_jwt()
-#     if claims.get("role") != "admin":
-#         return jsonify({"error": "Admin only"}), 403
+Regards,
+MyComplianceView
+"""
 
-#     email = (request.get_json() or {}).get("email")
-#     if not email:
-#         return jsonify({"error": "Email required"}), 400
+        send_email(
+            ADMIN_EMAIL,
+            subject,
+            body
+        )
 
-#     conn = get_db_connection()
-#     cursor = conn.cursor()
 
-#     cursor.execute("SELECT usrlst_id FROM user_list WHERE usrlst_email=%s", (email,))
-#     user = cursor.fetchone()
-#     if not user:
-#         return jsonify({"error": "User not found"}), 404
+        return jsonify({
+            "message": "Password reset request sent!"
+        }), 200
 
-#     cursor.execute("DELETE FROM regulatory_compliance WHERE regcmp_user_id=%s", (user["usrlst_id"],))
-#     cursor.execute("DELETE FROM self_compliance WHERE slfcmp_user_id=%s", (user["usrlst_id"],))
-#     cursor.execute("DELETE FROM user_list WHERE usrlst_id=%s", (user["usrlst_id"],))
 
-#     conn.commit()
-#     cursor.close()
-#     conn.close()
+    except Exception as e:
+        current_app.logger.exception(e)
+        return jsonify({"error": "Something went wrong"}), 500
 
-#     log_activity(
-#         user_id=claims.get("sub"),
-#         user_group_id=claims.get("user_group_id"),
-#         department="N/A",
-#         email=email,
-#         action=f"User Deleted ({email})"
-#     )
 
-#     return jsonify({"message": f"User {email} deleted"}), 200
+    finally:
+        cursor.close()
+        conn.close()
